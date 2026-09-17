@@ -1,5 +1,6 @@
 import { CATEGORIES } from './categories'
 import {
+  clearHomepageCache,
   deleteInvalidTopics,
   getArticlesForTopic,
   getCachedComparison,
@@ -9,7 +10,6 @@ import {
   getTopicsNeedingHomepageCards,
   needsIngestion,
   recordIngestionRun,
-  rebuildTopicsForCategory,
   upsertArticlesAndTopics,
   upsertComparison,
   upsertExtractions,
@@ -62,18 +62,20 @@ export async function getCachedHomepage(category: CategoryId): Promise<HomeStory
   const stories = await getHomeStories(category)
 
   if (!stories.length) {
-    throw createMosaicError('NO_HOME_STORIES', 'No homepage stories are cached for this category yet. Run /api/cron/ingest to fetch news and generate homepage cards.')
+    throw createMosaicError('NO_HOME_STORIES', 'No homepage stories are cached for this category yet.')
   }
 
   return stories
 }
 
 export async function refreshHomepageCategory(category: CategoryId) {
-  if (await needsIngestion(category)) {
+  const stale = await needsIngestion(category)
+
+  if (stale) {
+    await clearHomepageCache(category)
     await ingestCategory(category)
   }
 
-  await rebuildTopicsForCategory(category)
   await deleteInvalidTopics(category)
   await regenerateHomepageCards(category)
   const stories = await getHomeStories(category)

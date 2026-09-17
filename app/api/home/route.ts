@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { CATEGORIES, DEFAULT_CATEGORY, isCategoryId } from '@/lib/mosaic/categories'
 import { toMosaicError } from '@/lib/mosaic/env'
-import { getCachedHomepage, ingestAllCategories } from '@/lib/mosaic/pipeline'
+import { getCachedHomepage, refreshHomepageCategory } from '@/lib/mosaic/pipeline'
 import { getLastIngestionAt } from '@/lib/mosaic/db'
 
 export const runtime = 'nodejs'
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const isStale = !lastFetch || Date.now() - lastFetch.getTime() > ONE_HOUR_MS
 
     if (isStale) {
-      await ingestAllCategories()
+      await refreshHomepageCategory(category)
     }
 
     const stories = await getCachedHomepage(category)

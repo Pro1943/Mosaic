@@ -295,6 +295,12 @@ export async function upsertHomepageCards(stories: HomeStory[]) {
   if (error) throw createMosaicError('SUPABASE_HOME_STORIES_UPSERT_FAILED', 'Could not cache homepage stories.', error)
 }
 
+export async function clearHomepageCache(category: CategoryId) {
+  const supabase = getSupabaseAdmin()
+  const { error } = await supabase.from('homepage_story_cache').delete().eq('category', category)
+  if (error) throw createMosaicError('SUPABASE_HOME_STORIES_DELETE_FAILED', 'Could not clear stale homepage cache.', error)
+}
+
 export async function getArticlesForTopic(topicId: string): Promise<ArticleRow[]> {
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase

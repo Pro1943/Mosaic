@@ -7,32 +7,31 @@
 - Supabase schema is running.
 - Homepage articles load from real data.
 - Article pages load real comparison and narrative summaries.
+- Hourly cron removed; `/api/home` now checks staleness on every page open and re-ingests only when >1 hr has passed.
 
 ## Future Verification
 
-- Recheck the homepage self-healing flow after deployment:
-  - `/api/home` should return cached homepage stories.
-  - If `/api/home` fails or has no usable stories, the homepage should call `/api/cron/ingest` once and then retry `/api/home`.
-  - The UI should show specific error codes/messages if the retry still fails.
-- Recheck hourly ingestion in production after Vercel cron has run at least once.
+- Confirm the staleness check in `/api/home` works end-to-end in production:
+  - First visit with stale/empty cache should trigger ingestion and return fresh stories (slow, expected).
+  - Subsequent visits within 1 hr should return cached stories immediately (fast).
 - Confirm article skeletons are replaced independently as comparison and narrative requests finish.
+- Confirm all error codes/messages surface correctly in the UI error panel on real failures.
 
 ## Future Deployment
 
-- Add the same production values in Vercel project environment variables.
-- Confirm Vercel cron is enabled and will call `/api/cron/ingest` hourly from `vercel.json`.
+- Add all required env vars (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `GNEWS_API_KEY`, `NEWSDATA_API_KEY`, `CURRENTS_API_KEY`) to Vercel project settings.
 - After confirming fresh cache data is generated in production, decide whether old internal-name cache tables should be dropped manually from Supabase.
 
 ## Future Cleanup
 
+- Delete the now-unused `/api/cron/ingest` route (`app/api/cron/` directory).
 - Confirm no user-facing copy contains internal pipeline labels.
 - Confirm no fallback articles, fake source counts, fake numbers, or placeholder analysis remain.
 - Confirm all visual iconography uses Lucide icons rather than text arrows, emojis, or hand-drawn symbols.
-- Remove empty legacy route directories if they still exist locally.
 
 ## Possible Patches
 
-- Add a small admin-only ingestion status endpoint or hidden debug view if repeated provider/Gemini failures are hard to diagnose.
+- Add a concurrency guard in `/api/home` so simultaneous page opens within the same stale window do not each trigger a full ingest (e.g. a Supabase-backed lock or an in-memory flag with a short TTL).
 - Add provider-level timing and counts to `ingestion_runs.details` so errors can identify which upstream failed without exposing noise to normal users.
-- Add a soft cooldown for client-triggered ingestion so multiple browser tabs do not all call `/api/cron/ingest` after the same homepage failure.
-- Add tests around the homepage self-healing path and article analysis cache path.
+- Add a small admin-only ingestion status endpoint or hidden debug view if repeated provider/Gemini failures are hard to diagnose.
+- Add tests around the homepage staleness path and article analysis cache path.
