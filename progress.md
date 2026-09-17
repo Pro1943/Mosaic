@@ -23,3 +23,9 @@
 - Optimized homepage loading so `/api/home` reads cached homepage cards only, while `/api/cron/ingest` handles slow news fetching, reclustering, and homepage-card generation.
 - Added homepage self-healing: if `/api/home` fails, the client calls `/api/cron/ingest` once, then retries `/api/home` once before showing an error panel.
 - Removed product-facing references to internal pipeline labels from routes, UI copy, error text, schema names, and progress notes.
+
+## 2026-09-18
+
+- Removed the Vercel cron job (`0 * * * *`) from `vercel.json` to stay within the Hobby plan limit of one daily cron.
+- Moved staleness detection into `/api/home`: on every page open it checks the last successful ingestion time against a 1-hour threshold and triggers a full refresh only when stale, otherwise serves the cached stories immediately.
+- Simplified `HomeClient` to a single fetch — the two-step cron-then-retry logic is no longer needed now that the API route handles freshness internally.

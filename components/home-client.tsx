@@ -12,10 +12,6 @@ type HomeResponse = {
   error?: MosaicError
 }
 
-type CronResponse = {
-  error?: MosaicError
-}
-
 export function HomeClient() {
   const [category, setCategory] = useState<CategoryId>(DEFAULT_CATEGORY)
   const [stories, setStories] = useState<HomeStory[]>([])
@@ -30,32 +26,19 @@ export function HomeClient() {
       setError(null)
 
       try {
-        const firstAttempt = await fetchHome(category, controller.signal)
-        if (firstAttempt.stories) {
-          setStories(firstAttempt.stories)
-          return
-        }
-
-        const cronResponse = await fetch('/api/cron/ingest', {
+        const response = await fetch(`/api/home?category=${category}`, {
           signal: controller.signal,
           cache: 'no-store',
         })
-        const cronPayload = (await cronResponse.json()) as CronResponse
+        const payload = (await response.json()) as HomeResponse
 
-        if (!cronResponse.ok || cronPayload.error) {
+        if (!response.ok || payload.error) {
           setStories([])
-          setError(cronPayload.error ?? firstAttempt.error ?? { code: `HTTP_${cronResponse.status}`, message: cronResponse.statusText })
+          setError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
           return
         }
 
-        const retry = await fetchHome(category, controller.signal)
-        if (retry.stories) {
-          setStories(retry.stories)
-          return
-        }
-
-        setStories([])
-        setError(retry.error ?? firstAttempt.error ?? { code: 'HOME_RETRY_FAILED', message: 'Homepage refresh completed, but no stories were returned.' })
+        setStories(payload.stories ?? [])
       } catch (requestError) {
         if (!controller.signal.aborted) {
           setStories([])
@@ -147,22 +130,6 @@ export function HomeClient() {
       </main>
     </>
   )
-}
-
-async function fetchHome(category: CategoryId, signal: AbortSignal): Promise<{ stories?: HomeStory[]; error?: MosaicError }> {
-  const response = await fetch(`/api/home?category=${category}`, {
-    signal,
-    cache: 'no-store',
-  })
-  const payload = (await response.json()) as HomeResponse
-
-  if (!response.ok || payload.error) {
-    return {
-      error: payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText },
-    }
-  }
-
-  return { stories: payload.stories ?? [] }
 }
 
 function HomeSkeleton() {
