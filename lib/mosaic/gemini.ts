@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai'
+import { z } from 'zod'
 import { getEnv, getOptionalEnv, createMosaicError } from './env'
 import type { ArticleExtraction, ComparisonAnalysis, HomeStory, NarrativeAnalysis, NormalizedArticle } from './types'
 
@@ -18,12 +19,17 @@ function modelsFromEnv(name: string, defaults: string[]) {
   return configured?.length ? configured : defaults
 }
 
-async function generateJson<T>(models: string[], prompt: string, responseSchema: Record<string, unknown>): Promise<T> {
+async function generateJson<T>(
+  models: string[],
+  prompt: string,
+  responseSchema: Record<string, unknown>,
+  validator?: z.ZodType<T>,
+): Promise<T> {
   const failures: Array<{ model: string; error: unknown }> = []
 
   for (const model of models) {
     try {
-      return await generateJsonWithModel<T>(model, prompt, responseSchema)
+      return await generateJsonWithModel<T>(model, prompt, responseSchema, validator)
     } catch (error) {
       failures.push({ model, error: normalizeGeminiError(error) })
     }
@@ -32,7 +38,12 @@ async function generateJson<T>(models: string[], prompt: string, responseSchema:
   throw createMosaicError('GEMINI_ALL_MODELS_FAILED', 'All configured Gemini models failed for this structured JSON generation.', { failures })
 }
 
-async function generateJsonWithModel<T>(model: string, prompt: string, responseSchema: Record<string, unknown>): Promise<T> {
+async function generateJsonWithModel<T>(
+  model: string,
+  prompt: string,
+  responseSchema: Record<string, unknown>,
+  validator?: z.ZodType<T>,
+): Promise<T> {
   const response = await getClient().models.generateContent({
     model,
     contents: prompt,
@@ -46,11 +57,25 @@ async function generateJsonWithModel<T>(model: string, prompt: string, responseS
   const text = response.text
   if (!text) throw createMosaicError('GEMINI_EMPTY_RESPONSE', `Gemini ${model} returned an empty JSON response.`)
 
+  let parsed: unknown
   try {
-    return JSON.parse(text) as T
+    parsed = JSON.parse(text)
   } catch (error) {
     throw createMosaicError('GEMINI_JSON_PARSE_FAILED', `Gemini ${model} returned invalid JSON.`, { error, text })
   }
+
+  if (validator) {
+    const result = validator.safeParse(parsed)
+    if (!result.success) {
+      throw createMosaicError('GEMINI_VALIDATION_FAILED', `Gemini ${model} output failed schema validation.`, {
+        validationError: result.error.issues,
+        text,
+      })
+    }
+    return result.data
+  }
+
+  return parsed as T
 }
 
 function normalizeGeminiError(error: unknown) {
@@ -75,6 +100,74 @@ const sourcePreviewSchema = {
     url: { type: Type.STRING },
   },
   required: ['name', 'url'],
+}
+
+const homeCardOutputZod = z.object({
+  neutral_headline: z.string(),
+  snippet: z.string(),
+  sources_preview: z.array(
+    z.object({
+      name: z.string(),
+      url: z.string(),
+    }),
+  ),
+})
+
+const articleExtractionListZod = z.array(
+  z.object({
+    source: z.string(),
+    url: z.string(),
+    headline: z.string(),
+    claims: z.array(
+      z.object({
+        claim: z.string(),
+        type: z.enum(['reported_fact', 'quoted_statement', 'interpretation', 'framing']),
+      }),
+    ),
+  }),
+)
+
+const comparisonAnalysisZod = z.object({
+  overall_note: z.string(),
+  claims: z.array(
+    z.object({
+      claim_summary: z.string(),
+      type: z.enum(['reported_fact', 'quoted_statement', 'interpretation', 'framing']),
+      shared_by: z.array(z.string()),
+      conflicting: z.array(
+        z.object({
+          source: z.string(),
+          stance: z.string(),
+          emphasis: z.string(),
+          emotion: z.string(),
+        }),
+      ),
+      progression: z.string(),
+      consensus_level: z.enum(['low', 'medium', 'high']),
+    }),
+  ),
+})
+
+const narrativeOutputZod = z.object({
+  opening_paragraph: z.string(),
+  sections: z.array(
+    z.object({
+      label: z.string(),
+      body: z.string(),
+    }),
+  ),
+  conclusion: z.string(),
+  differs_on: z.string(),
+})
+
+export function calculateCoverageOverlapPercent(comparison: ComparisonAnalysis): number {
+  if (!comparison.claims || comparison.claims.length === 0) return 0
+
+  const weights = { high: 1.0, medium: 0.6, low: 0.2 }
+  const totalScore = comparison.claims.reduce((acc, c) => acc + (weights[c.consensus_level] ?? 0.5), 0)
+  const percent = Math.round((totalScore / comparison.claims.length) * 100)
+
+  return Math.max(0, Math.min(100, percent))
 }
 
 export async function generateHomepageCardForTopic(input: {
@@ -112,6 +205,7 @@ export async function generateHomepageCardForTopic(input: {
       }),
     ].join('\n'),
     schema,
+    homeCardOutputZod,
   )
 
   return {
@@ -164,6 +258,7 @@ export async function extractArticleClaims(articles: NormalizedArticle[]): Promi
       JSON.stringify({ articles }),
     ].join('\n'),
     schema,
+    articleExtractionListZod,
   )
 }
 
@@ -213,6 +308,7 @@ export async function synthesizeComparison(extractions: ArticleExtraction[]): Pr
       JSON.stringify({ extractions }),
     ].join('\n'),
     schema,
+    comparisonAnalysisZod,
   )
 }
 
@@ -233,23 +329,29 @@ export async function writeNarrative(comparison: ComparisonAnalysis): Promise<Na
         },
       },
       conclusion: { type: Type.STRING },
-      coverage_overlap_percent: { type: Type.NUMBER },
       differs_on: { type: Type.STRING },
     },
-    required: ['opening_paragraph', 'sections', 'conclusion', 'coverage_overlap_percent', 'differs_on'],
+    required: ['opening_paragraph', 'sections', 'conclusion', 'differs_on'],
   }
 
-  return generateJson<NarrativeAnalysis>(
+  const result = await generateJson<Omit<NarrativeAnalysis, 'coverage_overlap_percent'>>(
     ANALYSIS_MODELS,
     [
       'Write the Mosaic narrative from the comparison analysis only.',
       'Opening paragraph, then labeled sections covering common ground and differences, then a neutral conclusion.',
       'Do not introduce new claims. Do not decide which source is correct.',
-      'Compute coverage_overlap_percent from the comparison consensus distribution only.',
       'Return only JSON matching the schema.',
       '',
       JSON.stringify({ comparison }),
     ].join('\n'),
     schema,
+    narrativeOutputZod,
   )
+
+  const coverage_overlap_percent = calculateCoverageOverlapPercent(comparison)
+
+  return {
+    ...result,
+    coverage_overlap_percent,
+  }
 }

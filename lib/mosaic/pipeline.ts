@@ -1,5 +1,6 @@
 import { CATEGORIES } from './categories'
 import {
+  acquireIngestionLease,
   clearHomepageCache,
   deleteInvalidTopics,
   getArticlesForTopic,
@@ -10,6 +11,7 @@ import {
   getTopicsNeedingHomepageCards,
   needsIngestion,
   recordIngestionRun,
+  releaseIngestionLease,
   upsertArticlesAndTopics,
   upsertComparison,
   upsertExtractions,
@@ -69,20 +71,33 @@ export async function getCachedHomepage(category: CategoryId): Promise<HomeStory
 }
 
 export async function refreshHomepageCategory(category: CategoryId) {
-  const stale = await needsIngestion(category)
-
-  if (stale) {
-    await clearHomepageCache(category)
-    await ingestCategory(category)
+  const acquired = await acquireIngestionLease(category)
+  if (!acquired) {
+    const existing = await getHomeStories(category)
+    return {
+      category,
+      story_count: existing.length,
+    }
   }
 
-  await deleteInvalidTopics(category)
-  await regenerateHomepageCards(category)
-  const stories = await getHomeStories(category)
+  try {
+    const stale = await needsIngestion(category)
 
-  return {
-    category,
-    story_count: stories.length,
+    if (stale) {
+      await clearHomepageCache(category)
+      await ingestCategory(category)
+    }
+
+    await deleteInvalidTopics(category)
+    await regenerateHomepageCards(category)
+    const stories = await getHomeStories(category)
+
+    return {
+      category,
+      story_count: stories.length,
+    }
+  } finally {
+    await releaseIngestionLease(category).catch(() => undefined)
   }
 }
 

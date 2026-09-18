@@ -1,42 +1,18 @@
 'use client'
 
-import { ArrowLeft, GitBranch, Layers3, Search } from 'lucide-react'
-
-function Logo() {
-  return (
-    <a href="/" className="flex items-center gap-2.5 text-foreground">
-      <span className="grid size-7 grid-cols-2 gap-0.5" aria-hidden="true">
-        <span className="rounded-[3px] bg-accent" />
-        <span className="rounded-[3px] bg-foreground/80" />
-        <span className="rounded-[3px] bg-foreground/80" />
-        <span className="rounded-[3px] bg-accent" />
-      </span>
-      <span className="font-serif text-2xl tracking-[-0.04em]">Mosaic<span className="text-accent">.</span></span>
-    </a>
-  )
-}
+import Link from 'next/link'
+import { ArrowLeft, GitBranch, Layers3 } from 'lucide-react'
+import { Header, Footer } from '@/components/mosaic-shell'
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border bg-background/95">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-5 py-5 md:px-8">
-          <div className="flex items-center gap-5">
-            <Logo />
-            <p className="hidden text-sm text-muted-foreground md:block">Because one perspective never tells the whole story.</p>
-          </div>
-          <nav className="hidden items-center gap-6 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground md:flex">
-            <a href="/" className="transition-colors hover:text-accent">Home</a>
-            <a href="/about" className="text-accent">About</a>
-            <button className="transition-colors hover:text-accent" aria-label="Search"><Search size={16} /></button>
-          </nav>
-        </div>
-      </header>
+    <div id="top" className="min-h-screen bg-background text-foreground">
+      <Header />
 
       <main className="mx-auto max-w-6xl px-5 py-14 md:px-8 md:py-20">
-        <a href="/" className="mb-12 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-accent">
+        <Link href="/" className="mb-12 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-accent">
           <ArrowLeft size={15} /> Back to home
-        </a>
+        </Link>
         <div className="grid gap-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.72fr)] lg:gap-20">
           <section>
             <p className="mb-5 text-xs font-semibold uppercase tracking-[0.18em] text-accent">About Mosaic</p>
@@ -59,10 +35,7 @@ export default function AboutPage() {
         </div>
       </main>
 
-      <footer className="mx-auto flex max-w-6xl flex-col gap-3 border-t border-border px-5 py-8 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between md:px-8">
-        <span className="font-serif text-base text-foreground">Mosaic<span className="text-accent">.</span></span>
-        <span>A clearer view of the news.</span>
-      </footer>
+      <Footer />
     </div>
   )
 }

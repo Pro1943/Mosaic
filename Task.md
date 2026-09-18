@@ -8,6 +8,12 @@
 - Homepage articles load from real data.
 - Article pages load real comparison and narrative summaries.
 - Hourly cron removed; `/api/home` now checks staleness on every page open and re-ingests only when >1 hr has passed.
+- Concurrency guard added to prevent simultaneous duplicate ingestion runs.
+- Obsolete `/api/cron/ingest` route deleted.
+- Strict TypeScript checking re-enabled in Next config.
+- Zod validation and code-based coverage overlap calculation implemented.
+- Mobile/tablet sidebar drawer implemented for Home and About navigation.
+- Header subtitle vertically aligned with logo; unused search icon removed.
 
 ## Future Verification
 
@@ -24,14 +30,12 @@
 
 ## Future Cleanup
 
-- Delete the now-unused `/api/cron/ingest` route (`app/api/cron/` directory).
 - Confirm no user-facing copy contains internal pipeline labels.
 - Confirm no fallback articles, fake source counts, fake numbers, or placeholder analysis remain.
 - Confirm all visual iconography uses Lucide icons rather than text arrows, emojis, or hand-drawn symbols.
 
 ## Possible Patches
 
-- Add a concurrency guard in `/api/home` so simultaneous page opens within the same stale window do not each trigger a full ingest (e.g. a Supabase-backed lock or an in-memory flag with a short TTL).
 - Add provider-level timing and counts to `ingestion_runs.details` so errors can identify which upstream failed without exposing noise to normal users.
 - Add a small admin-only ingestion status endpoint or hidden debug view if repeated provider/Gemini failures are hard to diagnose.
 - Add tests around the homepage staleness path and article analysis cache path.

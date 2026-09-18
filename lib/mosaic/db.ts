@@ -53,6 +53,58 @@ export async function needsIngestion(category: CategoryId) {
   return !last || Date.now() - last.getTime() > ONE_HOUR_MS
 }
 
+export async function acquireIngestionLease(category: CategoryId, leaseTimeoutMs = 5 * 60 * 1000): Promise<boolean> {
+  const supabase = getSupabaseAdmin()
+  const now = new Date()
+  const lockThreshold = new Date(now.getTime() - leaseTimeoutMs).toISOString()
+
+  const { data: recentRunning } = await supabase
+    .from('ingestion_runs')
+    .select('id, details, finished_at')
+    .eq('category', category)
+    .eq('status', 'failed')
+    .gte('finished_at', lockThreshold)
+    .order('finished_at', { ascending: false })
+    .limit(10)
+
+  const activeLock = recentRunning?.find((run) => {
+    const details = run.details as { lock?: boolean } | null
+    return details && details.lock === true
+  })
+
+  if (activeLock) {
+    return false
+  }
+
+  const { error } = await supabase.from('ingestion_runs').insert({
+    category,
+    status: 'failed',
+    details: { lock: true, started_at: now.toISOString() },
+    finished_at: now.toISOString(),
+  })
+
+  return !error
+}
+
+export async function releaseIngestionLease(category: CategoryId) {
+  const supabase = getSupabaseAdmin()
+  const lockThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const { data: activeLocks } = await supabase
+    .from('ingestion_runs')
+    .select('id, details')
+    .eq('category', category)
+    .eq('status', 'failed')
+    .gte('finished_at', lockThreshold)
+
+  const lockIds = (activeLocks ?? [])
+    .filter((run) => (run.details as { lock?: boolean } | null)?.lock === true)
+    .map((run) => run.id)
+
+  if (lockIds.length > 0) {
+    await supabase.from('ingestion_runs').delete().in('id', lockIds)
+  }
+}
+
 export async function recordIngestionRun(category: CategoryId, status: 'success' | 'failed', details: unknown) {
   const supabase = getSupabaseAdmin()
   const { error } = await supabase.from('ingestion_runs').insert({
