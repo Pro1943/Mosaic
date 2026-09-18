@@ -2,6 +2,7 @@ import { CATEGORIES } from './categories'
 import {
   acquireIngestionLease,
   clearHomepageCache,
+  countHomeStories,
   deleteInvalidTopics,
   getArticlesForTopic,
   getCachedComparison,
@@ -9,6 +10,7 @@ import {
   getCachedNarrative,
   getHomeStories,
   getTopicsNeedingHomepageCards,
+  getUncachedTopicsForCategory,
   needsIngestion,
   recordIngestionRun,
   releaseIngestionLease,
@@ -60,13 +62,35 @@ export async function ingestAllCategories() {
   }
 }
 
-export async function getCachedHomepage(category: CategoryId): Promise<HomeStory[]> {
-  const stories = await getHomeStories(category)
+export async function getCachedHomepage(category: CategoryId, limit = 6, offset = 0): Promise<HomeStory[]> {
+  const stories = await getHomeStories(category, limit, offset)
 
-  if (!stories.length) {
+  if (!stories.length && offset === 0) {
     throw createMosaicError('NO_HOME_STORIES', 'No homepage stories are cached for this category yet.')
   }
 
+  return stories
+}
+
+export async function generateMoreHomepageCards(category: CategoryId, count = 3): Promise<HomeStory[]> {
+  const topics = await getUncachedTopicsForCategory(category, count)
+  if (!topics.length) return []
+
+  const generated = await mapWithConcurrency(topics, 2, async (topic) => {
+    const articles = await getArticlesForTopic(topic.id)
+    if (articles.length < 2) return null
+
+    return generateHomepageCardForTopic({
+      topic_id: topic.id,
+      category,
+      articles: articles.map(articleRowToNormalized),
+    })
+  })
+
+  const stories = generated.filter(Boolean) as HomeStory[]
+  if (stories.length > 0) {
+    await upsertHomepageCards(stories)
+  }
   return stories
 }
 

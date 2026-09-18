@@ -174,7 +174,7 @@ function CoverageCard({ narrative }: { narrative: NarrativeAnalysis | null }) {
   return (
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        <Percent size={15} className="text-accent" /> Coverage overlap
+        <Percent size={15} className="text-accent" /> Source overlap
       </div>
       {narrative ? (
         <>
@@ -182,7 +182,7 @@ function CoverageCard({ narrative }: { narrative: NarrativeAnalysis | null }) {
             <span className="font-serif text-6xl leading-none tracking-[-0.05em]">{Math.round(narrative.coverage_overlap_percent)}</span>
             <span className="pb-1 font-serif text-3xl text-accent">%</span>
           </div>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">of the reviewed coverage overlaps according to the comparison analysis.</p>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">of analyzed claims are corroborated across multiple reporting sources.</p>
         </>
       ) : (
         <CardSkeleton lines={3} />

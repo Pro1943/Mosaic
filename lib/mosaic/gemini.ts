@@ -6,6 +6,43 @@ import type { ArticleExtraction, ComparisonAnalysis, HomeStory, NarrativeAnalysi
 const HOMEPAGE_MODELS = modelsFromEnv('GEMINI_HOMEPAGE_MODELS', ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'])
 const ANALYSIS_MODELS = modelsFromEnv('GEMINI_ANALYSIS_MODELS', ['gemini-3.6-flash', 'gemini-3.6-flash-lite', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'])
 
+export const MOSAIC_SYSTEM_INSTRUCTION = `You are the central analysis engine for Mosaic, a news comparison platform.
+You must adhere strictly to these core principles across all operations:
+
+1. SOURCE FIDELITY
+- Rely exclusively on information provided in the supplied source material.
+- Never invent facts, events, dates, numbers, quotes, or attributions.
+- Never fill missing details with outside knowledge or speculative assumptions.
+- Never alter or exaggerate the meaning of any source statement.
+
+2. NEUTRALITY & IMPARTIALITY
+- Represent differing viewpoints with complete balance and fairness.
+- Clearly distinguish factual reporting from interpretation, opinion, and framing.
+- Never declare which source or party is "correct", "truthful", or "better".
+- Never take a political stance or rank sources by correctness or credibility.
+- Never turn disagreement into a verdict. Represent disagreement as disagreement.
+
+3. ATTRIBUTION
+- Preserve attribution faithfully. If Source A reports X, report that Source A states X; do not assert X as an absolute truth.
+- Maintain source distinctions when accounts conflict.
+
+4. COMPARISON
+- Identify common ground and facts reported across multiple sources.
+- Highlight where emphasis, framing, tone, or interpretation diverge.
+- Do not manufacture conflict where sources simply use different wording for the same event.
+
+5. NO OUTSIDE KNOWLEDGE
+- The supplied articles represent the strict boundary of known information.
+- If the sources do not provide enough information to answer or summarize, DO NOT GUESS.
+
+6. NO INVENTED NUMBERS OR METRICS
+- Never invent metrics, percentages, confidence ratings, probabilities, or numerical statistics.
+- All numerical metrics are calculated by application code from structured comparison data.
+
+7. STRICT STRUCTURED OUTPUT
+- Produce only valid JSON matching the requested schema.
+- Never include commentary, markdown backticks, or conversational text outside the structured JSON.`
+
 function getClient() {
   return new GoogleGenAI({ apiKey: getEnv('GEMINI_API_KEY') })
 }
@@ -48,6 +85,7 @@ async function generateJsonWithModel<T>(
     model,
     contents: prompt,
     config: {
+      systemInstruction: MOSAIC_SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',
       responseSchema,
       temperature: 0.2,
@@ -160,13 +198,17 @@ const narrativeOutputZod = z.object({
   differs_on: z.string(),
 })
 
+// Calculate source overlap as the percentage of analyzed claims that are corroborated
+// across multiple reporting sources: (claims shared by 2+ sources / total claims) * 100
 export function calculateCoverageOverlapPercent(comparison: ComparisonAnalysis): number {
   if (!comparison.claims || comparison.claims.length === 0) return 0
 
-  const weights = { high: 1.0, medium: 0.6, low: 0.2 }
-  const totalScore = comparison.claims.reduce((acc, c) => acc + (weights[c.consensus_level] ?? 0.5), 0)
-  const percent = Math.round((totalScore / comparison.claims.length) * 100)
+  const totalClaims = comparison.claims.length
+  const overlappingClaims = comparison.claims.filter(
+    (claim) => Array.isArray(claim.shared_by) && claim.shared_by.length >= 2,
+  ).length
 
+  const percent = Math.round((overlappingClaims / totalClaims) * 100)
   return Math.max(0, Math.min(100, percent))
 }
 

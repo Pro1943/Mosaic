@@ -31,10 +31,29 @@ async function fetchJson(url: string): Promise<unknown> {
   return response.json()
 }
 
+const SPORTS_KEYWORDS = [
+  'sport', 'sports', 'football', 'soccer', 'fifa', 'uefa', 'premier league', 'la liga', 'serie a', 'bundesliga',
+  'champions league', 'cricket', 'ipl', 'test match', 'wicket', 'icc', 'bcci', 'tennis', 'atp', 'wta',
+  'wimbledon', 'grand slam', 'basketball', 'nba', 'wnba', 'baseball', 'mlb', 'hockey', 'nhl', 'rugby',
+  'nfl', 'touchdown', 'quarterback', 'super bowl', 'olympics', 'olympic', 'athletics', 'marathon', 'golf',
+  'pga', 'boxing', 'ufc', 'mma', 'motorsport', 'formula 1', 'formula one', 'f1', 'grand prix', 'nascar',
+  'motogp', 'cycling', 'tour de france', 'swimming', 'badminton', 'volleyball', 'coach', 'quarterfinal',
+  'semifinal', 'championship', 'tournament', 'playoff', 'stadium', 'ball', 'race', 'derby', 'score',
+  'goal', 'striker', 'goalkeeper', 'athlete', 'athletes'
+]
+
+function isSportsArticle(article: Pick<NormalizedArticle, 'headline' | 'body' | 'url'>): boolean {
+  const text = `${article.headline} ${article.body} ${article.url}`.toLowerCase()
+  return SPORTS_KEYWORDS.some((kw) => text.includes(kw))
+}
+
 async function fetchGNews(category: CategoryId): Promise<ProviderResult> {
   const key = getEnv('GNEWS_API_KEY')
-  const query = encodeURIComponent(getCategory(category).query)
-  const data = await fetchJson(`https://gnews.io/api/v4/search?q=${query}&lang=en&max=10&apikey=${key}`)
+  const url = category === 'sports'
+    ? `https://gnews.io/api/v4/top-headlines?category=sports&lang=en&max=10&apikey=${key}`
+    : `https://gnews.io/api/v4/search?q=${encodeURIComponent(getCategory(category).query)}&lang=en&max=10&apikey=${key}`
+
+  const data = await fetchJson(url)
   const articles = Array.isArray((data as { articles?: unknown }).articles) ? (data as { articles: Record<string, unknown>[] }).articles : []
 
   return {
@@ -55,8 +74,11 @@ async function fetchGNews(category: CategoryId): Promise<ProviderResult> {
 
 async function fetchNewsData(category: CategoryId): Promise<ProviderResult> {
   const key = getEnv('NEWSDATA_API_KEY')
-  const query = encodeURIComponent(getCategory(category).query)
-  const data = await fetchJson(`https://newsdata.io/api/1/news?apikey=${key}&language=en&q=${query}`)
+  const url = category === 'sports'
+    ? `https://newsdata.io/api/1/news?apikey=${key}&language=en&category=sports`
+    : `https://newsdata.io/api/1/news?apikey=${key}&language=en&q=${encodeURIComponent(getCategory(category).query)}`
+
+  const data = await fetchJson(url)
   const results = Array.isArray((data as { results?: unknown }).results) ? (data as { results: Record<string, unknown>[] }).results : []
 
   return {
@@ -77,8 +99,11 @@ async function fetchNewsData(category: CategoryId): Promise<ProviderResult> {
 
 async function fetchCurrents(category: CategoryId): Promise<ProviderResult> {
   const key = getEnv('CURRENTS_API_KEY')
-  const query = encodeURIComponent(getCategory(category).query)
-  const data = await fetchJson(`https://api.currentsapi.services/v1/search?apiKey=${key}&language=en&keywords=${query}`)
+  const url = category === 'sports'
+    ? `https://api.currentsapi.services/v1/search?apiKey=${key}&language=en&category=sports`
+    : `https://api.currentsapi.services/v1/search?apiKey=${key}&language=en&keywords=${encodeURIComponent(getCategory(category).query)}`
+
+  const data = await fetchJson(url)
   const results = Array.isArray((data as { news?: unknown }).news) ? (data as { news: Record<string, unknown>[] }).news : []
 
   return {
@@ -105,12 +130,21 @@ export async function fetchNewsForCategory(category: CategoryId) {
     return { provider, articles: [], error: result.reason instanceof Error ? result.reason.message : String(result.reason) }
   })
 
-  const articles = dedupeArticles(results.flatMap((result) => result.articles))
+  let rawArticles = results.flatMap((result) => result.articles)
+  if (category === 'sports') {
+    rawArticles = rawArticles.filter(isSportsArticle)
+  }
+
+  const articles = dedupeArticles(rawArticles)
   const succeeded = results.filter((result) => !result.error).map((result) => result.provider)
   const failed = results.filter((result) => result.error).map((result) => ({ provider: result.provider, error: result.error }))
 
   if (!articles.length) {
-    throw createMosaicError('NEWS_ALL_PROVIDERS_FAILED', 'No news articles were fetched from GNews.io, NewsData.io, or Currents News.', { failed })
+    const code = category === 'sports' ? 'INSUFFICIENT_SPORTS_COVERAGE' : 'NEWS_ALL_PROVIDERS_FAILED'
+    const message = category === 'sports'
+      ? 'Insufficient sports coverage found across configured news providers.'
+      : 'No news articles were fetched from GNews.io, NewsData.io, or Currents News.'
+    throw createMosaicError(code, message, { failed })
   }
 
   return { articles, succeeded, failed }

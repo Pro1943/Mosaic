@@ -36,3 +36,9 @@
 - Moved `coverage_overlap_percent` calculation from Gemini prompt into application code.
 - Added responsive slide-in mobile navigation drawer in `Header` enabling mobile/tablet access to Home and About pages.
 - Aligned the header subtitle text with the Mosaic logo and removed the unused search icon.
+- Fixed the percentage/math system: replaced arbitrary weighted scoring with a deterministic formula — source overlap is now `(claims corroborated by ≥2 sources) ÷ total claims × 100`. UI label updated to "Source overlap".
+- Added a central `MOSAIC_SYSTEM_INSTRUCTION` constant passed as `systemInstruction` to every Gemini call — enforces source fidelity, neutrality, attribution, no outside knowledge, and strict structured output.
+- Fixed the sports news pipeline: per-provider native sports category endpoints (`/top-headlines?category=sports` for GNews, `category=sports` for NewsData/Currents) plus a post-fetch `isSportsArticle()` keyword filter. Returns `INSUFFICIENT_SPORTS_COVERAGE` when results are sparse rather than masking the failure.
+- Sports category query expanded to include more terms (football, soccer, basketball, tennis, cricket, championship, tournament, athletics).
+- Added "Fetch More" feature: new `GET /api/home/more` endpoint (no ingestion triggered) + `generateMoreHomepageCards` generates cards for uncached topics only + "Fetch more stories" button in `HomeClient` with loading/disabled/error states and topic-ID-based deduplication.
+- `pnpm tsc --noEmit` passes with zero errors after all changes.

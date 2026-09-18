@@ -11,9 +11,15 @@
 - Concurrency guard added to prevent simultaneous duplicate ingestion runs.
 - Obsolete `/api/cron/ingest` route deleted.
 - Strict TypeScript checking re-enabled in Next config.
-- Zod validation and code-based coverage overlap calculation implemented.
+- Zod validation implemented for all Gemini structured outputs.
+- **Source overlap** percentage is now deterministic: `(claims corroborated by ≥2 sources) / total claims × 100`. Old arbitrary weighted formula removed.
+- Central `MOSAIC_SYSTEM_INSTRUCTION` added and applied to every Gemini API call.
+- Sports pipeline fixed: native sports endpoints per provider + `isSportsArticle()` post-filter + `INSUFFICIENT_SPORTS_COVERAGE` error code.
 - Mobile/tablet sidebar drawer implemented for Home and About navigation.
 - Header subtitle vertically aligned with logo; unused search icon removed.
+- **Fetch More** button added to homepage: `GET /api/home/more` (no ingestion), generates cards for uncached topics only, appends results with topic-ID deduplication, loading/disabled/error states.
+- `pnpm tsc --noEmit` passes with zero errors.
+
 
 ## Future Verification
 

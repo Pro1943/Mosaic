@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight, Newspaper } from 'lucide-react'
+import { ChevronRight, Loader2, Newspaper } from 'lucide-react'
 import { CATEGORIES, DEFAULT_CATEGORY } from '@/lib/mosaic/categories'
 import type { CategoryId, HomeStory, MosaicError } from '@/lib/mosaic/types'
 import { ErrorPanel } from './mosaic-error'
@@ -12,14 +12,26 @@ type HomeResponse = {
   error?: MosaicError
 }
 
+type MoreResponse = {
+  stories?: HomeStory[]
+  error?: MosaicError
+}
+
+
 export function HomeClient() {
   const [category, setCategory] = useState<CategoryId>(DEFAULT_CATEGORY)
   const [stories, setStories] = useState<HomeStory[]>([])
   const [error, setError] = useState<MosaicError | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fetchingMore, setFetchingMore] = useState(false)
+  const [noMoreStories, setNoMoreStories] = useState(false)
+  const [moreError, setMoreError] = useState<string | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
+    // Reset "more" state whenever the category changes
+    setNoMoreStories(false)
+    setMoreError(null)
 
     async function loadStories() {
       setLoading(true)
@@ -55,6 +67,45 @@ export function HomeClient() {
     loadStories()
     return () => controller.abort()
   }, [category])
+
+  async function fetchMore() {
+    if (fetchingMore || noMoreStories) return
+    setFetchingMore(true)
+    setMoreError(null)
+
+    try {
+      const offset = stories.length
+      const response = await fetch(`/api/home/more?category=${category}&offset=${offset}`, {
+        cache: 'no-store',
+      })
+      const payload = (await response.json()) as MoreResponse
+
+      if (!response.ok || payload.error) {
+        setMoreError(payload.error?.message ?? 'Could not load more stories.')
+        return
+      }
+
+      const incoming = payload.stories ?? []
+      if (incoming.length === 0) {
+        setNoMoreStories(true)
+        return
+      }
+
+      // Deduplicate by topic_id before appending
+      const existingIds = new Set(stories.map((s) => s.topic_id))
+      const fresh = incoming.filter((s) => !existingIds.has(s.topic_id))
+      setStories((prev) => [...prev, ...fresh])
+
+      if (fresh.length === 0) {
+        setNoMoreStories(true)
+      }
+    } catch (err) {
+      setMoreError(err instanceof Error ? err.message : 'Could not load more stories.')
+    } finally {
+      setFetchingMore(false)
+    }
+  }
+
 
   return (
     <>
@@ -126,6 +177,29 @@ export function HomeClient() {
               ))}
             </div>
           ) : null}
+          {!loading && !error && (
+            <div className="mt-6 flex flex-col items-center gap-3">
+              {moreError && (
+                <p className="text-sm text-destructive">{moreError}</p>
+              )}
+              <button
+                onClick={fetchMore}
+                disabled={fetchingMore || noMoreStories}
+                className="flex items-center gap-2 rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {fetchingMore ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    Loading more…
+                  </>
+                ) : noMoreStories ? (
+                  'No more stories available'
+                ) : (
+                  'Fetch more stories'
+                )}
+              </button>
+            </div>
+          )}
         </section>
       </main>
     </>

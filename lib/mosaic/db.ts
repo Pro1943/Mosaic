@@ -326,17 +326,53 @@ export async function getTopicsNeedingHomepageCards(category: CategoryId) {
   return (data ?? []) as TopicRow[]
 }
 
-export async function getHomeStories(category: CategoryId): Promise<HomeStory[]> {
+export async function getHomeStories(category: CategoryId, limit = 6, offset = 0): Promise<HomeStory[]> {
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from('homepage_story_cache')
     .select('topic_id, neutral_headline, snippet, source_count, sources_preview, category, updated_at')
     .eq('category', category)
     .order('updated_at', { ascending: false })
-    .limit(12)
+    .range(offset, offset + limit - 1)
 
   if (error) throw createMosaicError('SUPABASE_HOME_STORIES_SELECT_FAILED', 'Could not read homepage stories from Supabase.', error)
   return (data ?? []) as HomeStory[]
+}
+
+export async function countHomeStories(category: CategoryId): Promise<number> {
+  const supabase = getSupabaseAdmin()
+  const { count, error } = await supabase
+    .from('homepage_story_cache')
+    .select('topic_id', { count: 'exact', head: true })
+    .eq('category', category)
+
+  if (error) return 0
+  return count ?? 0
+}
+
+export async function getUncachedTopicsForCategory(category: CategoryId, limit = 3): Promise<TopicRow[]> {
+  const supabase = getSupabaseAdmin()
+  const { data: cached } = await supabase
+    .from('homepage_story_cache')
+    .select('topic_id')
+    .eq('category', category)
+
+  const cachedIds = (cached ?? []).map((row) => row.topic_id)
+
+  let query = supabase
+    .from('topics')
+    .select('id, category, title_hint, created_at, updated_at')
+    .eq('category', category)
+    .order('updated_at', { ascending: false })
+    .limit(limit)
+
+  if (cachedIds.length > 0) {
+    query = query.not('id', 'in', `(${cachedIds.join(',')})`)
+  }
+
+  const { data, error } = await query
+  if (error) return []
+  return (data ?? []) as TopicRow[]
 }
 
 export async function upsertHomepageCards(stories: HomeStory[]) {
