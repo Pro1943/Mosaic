@@ -1,5 +1,3 @@
-export type CategoryId = 'world' | 'economy' | 'sports' | 'others'
-
 export type NormalizedArticle = {
   source: string
   headline: string
@@ -7,7 +5,6 @@ export type NormalizedArticle = {
   published_at: string | null
   body: string
   url: string
-  category: CategoryId
 }
 
 export type SourcePreview = {
@@ -21,7 +18,6 @@ export type HomeStory = {
   snippet: string
   source_count: number
   sources_preview: SourcePreview[]
-  category: CategoryId
   updated_at: string
 }
 
@@ -84,7 +80,6 @@ export type TopicMeta = {
   topic_id: string
   neutral_headline: string
   snippet: string
-  category: CategoryId
   published_at: string | null
   source_count: number
   sources: TopicSource[]

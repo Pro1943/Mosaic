@@ -35,8 +35,8 @@ export function Header() {
             <Link href="/" className="transition-colors hover:text-accent">
               Home
             </Link>
-            <Link href="/about" className="transition-colors hover:text-accent">
-              About
+            <Link href="/news" className="transition-colors hover:text-accent">
+              News
             </Link>
           </nav>
           <button
@@ -83,11 +83,11 @@ export function Header() {
                 Home
               </Link>
               <Link
-                href="/about"
+                href="/news"
                 onClick={() => setIsOpen(false)}
                 className="rounded-lg px-4 py-3 text-sm font-medium transition-colors hover:bg-muted hover:text-accent"
               >
-                About
+                News
               </Link>
             </nav>
 

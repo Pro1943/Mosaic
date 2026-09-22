@@ -3,8 +3,8 @@ import { z } from 'zod'
 import { getEnv, getOptionalEnv, createMosaicError } from './env'
 import type { ArticleExtraction, ComparisonAnalysis, HomeStory, NarrativeAnalysis, NormalizedArticle } from './types'
 
-const HOMEPAGE_MODELS = modelsFromEnv('GEMINI_HOMEPAGE_MODELS', ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'])
-const ANALYSIS_MODELS = modelsFromEnv('GEMINI_ANALYSIS_MODELS', ['gemini-3.6-flash', 'gemini-3.6-flash-lite', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'])
+const HOMEPAGE_MODELS = modelsFromEnv('GEMINI_HOMEPAGE_MODELS', ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'])
+const ANALYSIS_MODELS = modelsFromEnv('GEMINI_ANALYSIS_MODELS', ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'])
 
 export const MOSAIC_SYSTEM_INSTRUCTION = `You are the central analysis engine for Mosaic, a news comparison platform.
 You must adhere strictly to these core principles across all operations:
@@ -214,7 +214,6 @@ export function calculateCoverageOverlapPercent(comparison: ComparisonAnalysis):
 
 export async function generateHomepageCardForTopic(input: {
   topic_id: string
-  category: HomeStory['category']
   articles: NormalizedArticle[]
 }): Promise<HomeStory> {
   const schema = {
@@ -230,7 +229,7 @@ export async function generateHomepageCardForTopic(input: {
     required: ['neutral_headline', 'snippet', 'sources_preview'],
   }
 
-  const result = await generateJson<Omit<HomeStory, 'topic_id' | 'source_count' | 'category' | 'updated_at'>>(
+  const result = await generateJson<Omit<HomeStory, 'topic_id' | 'source_count' | 'updated_at'>>(
     HOMEPAGE_MODELS,
     [
       'You produce neutral topic cards for Mosaic, a news comparison platform.',
@@ -256,7 +255,6 @@ export async function generateHomepageCardForTopic(input: {
     snippet: result.snippet,
     source_count: input.articles.length,
     sources_preview: result.sources_preview,
-    category: input.category,
     updated_at: new Date().toISOString(),
   }
 }

@@ -1,225 +1,158 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight, Loader2, Newspaper } from 'lucide-react'
-import { CATEGORIES, DEFAULT_CATEGORY } from '@/lib/mosaic/categories'
-import type { CategoryId, HomeStory, MosaicError } from '@/lib/mosaic/types'
-import { ErrorPanel } from './mosaic-error'
-
-type HomeResponse = {
-  stories?: HomeStory[]
-  error?: MosaicError
-}
-
-type MoreResponse = {
-  stories?: HomeStory[]
-  error?: MosaicError
-}
-
+import { ArrowRight, GitBranch, Layers3, Percent, ShieldCheck } from 'lucide-react'
+import { TypewriterTitle } from './typewriter-title'
+import { GradientButton } from './ui/gradient-button'
 
 export function HomeClient() {
-  const [category, setCategory] = useState<CategoryId>(DEFAULT_CATEGORY)
-  const [stories, setStories] = useState<HomeStory[]>([])
-  const [error, setError] = useState<MosaicError | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [fetchingMore, setFetchingMore] = useState(false)
-  const [noMoreStories, setNoMoreStories] = useState(false)
-  const [moreError, setMoreError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const controller = new AbortController()
-    // Reset "more" state whenever the category changes
-    setNoMoreStories(false)
-    setMoreError(null)
-
-    async function loadStories() {
-      setLoading(true)
-      setError(null)
-
-      try {
-        const response = await fetch(`/api/home?category=${category}`, {
-          signal: controller.signal,
-          cache: 'no-store',
-        })
-        const payload = (await response.json()) as HomeResponse
-
-        if (!response.ok || payload.error) {
-          setStories([])
-          setError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
-          return
-        }
-
-        setStories(payload.stories ?? [])
-      } catch (requestError) {
-        if (!controller.signal.aborted) {
-          setStories([])
-          setError({
-            code: 'HOME_REQUEST_FAILED',
-            message: requestError instanceof Error ? requestError.message : 'Could not request the Mosaic homepage feed.',
-          })
-        }
-      } finally {
-        if (!controller.signal.aborted) setLoading(false)
-      }
-    }
-
-    loadStories()
-    return () => controller.abort()
-  }, [category])
-
-  async function fetchMore() {
-    if (fetchingMore || noMoreStories) return
-    setFetchingMore(true)
-    setMoreError(null)
-
-    try {
-      const offset = stories.length
-      const response = await fetch(`/api/home/more?category=${category}&offset=${offset}`, {
-        cache: 'no-store',
-      })
-      const payload = (await response.json()) as MoreResponse
-
-      if (!response.ok || payload.error) {
-        setMoreError(payload.error?.message ?? 'Could not load more stories.')
-        return
-      }
-
-      const incoming = payload.stories ?? []
-      if (incoming.length === 0) {
-        setNoMoreStories(true)
-        return
-      }
-
-      // Deduplicate by topic_id before appending
-      const existingIds = new Set(stories.map((s) => s.topic_id))
-      const fresh = incoming.filter((s) => !existingIds.has(s.topic_id))
-      setStories((prev) => [...prev, ...fresh])
-
-      if (fresh.length === 0) {
-        setNoMoreStories(true)
-      }
-    } catch (err) {
-      setMoreError(err instanceof Error ? err.message : 'Could not load more stories.')
-    } finally {
-      setFetchingMore(false)
-    }
-  }
-
-
   return (
-    <>
-      <section className="border-b border-border">
-        <div className="mx-auto max-w-6xl px-5 py-14 md:px-8 md:py-20">
-          <p className="mb-5 text-xs font-semibold uppercase tracking-[0.18em] text-accent">A clearer view of the news</p>
-          <h1 className="max-w-3xl font-serif text-4xl leading-[1.08] tracking-[-0.04em] text-foreground md:text-6xl">
-            Stories, considered from every angle.
-          </h1>
-          <p className="mt-6 max-w-xl text-base leading-7 text-muted-foreground">
-            Mosaic brings together coverage from across the spectrum, showing where sources agree, where they differ, and what the full picture looks like.
+    <div className="flex flex-col">
+      <section className="relative overflow-hidden border-b border-border bg-gradient-to-b from-background via-card/50 to-background py-16 md:py-28">
+        <div className="mx-auto max-w-5xl px-5 text-center md:px-8">
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+            A Clearer View of the News
           </p>
+          <TypewriterTitle
+            sequences={[
+              { text: 'Mosaic', deleteAfter: true, pauseAfter: 2200 },
+              { text: 'Because one perspective never tells the whole story.', deleteAfter: true, pauseAfter: 3500 },
+            ]}
+            typingSpeed={45}
+            deleteSpeed={25}
+            startDelay={300}
+            loopDelay={1200}
+          />
+          <p className="mx-auto -mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">
+            Mosaic brings together reporting from across the media spectrum, mapping out common ground, highlighting differences, and giving you the complete picture.
+          </p>
+          <div className="mt-10 flex items-center justify-center">
+            <Link href="/news">
+              <GradientButton
+                variant="teal"
+                label="Read The News"
+                icon={<ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />}
+              />
+            </Link>
+          </div>
         </div>
       </section>
-      <main id="latest" className="mx-auto grid max-w-6xl gap-8 px-5 py-12 md:px-8 md:py-16 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="border-b border-border pb-4 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Categories</p>
-            <div className="mt-4 grid gap-2">
-              {CATEGORIES.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setCategory(item.id)}
-                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                    category === item.id ? 'border-accent bg-card text-accent' : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </aside>
-        <section>
-          <div className="mb-7 flex items-end justify-between border-b border-border pb-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Today</p>
-              <h2 className="mt-2 font-serif text-2xl tracking-[-0.02em]">The latest stories</h2>
-            </div>
-            <span className="hidden text-xs text-muted-foreground sm:block">Updated throughout the day</span>
-          </div>
-          {loading ? <HomeSkeleton /> : null}
-          {!loading && error ? <ErrorPanel error={error} /> : null}
-          {!loading && !error ? (
-            <div className="grid gap-3">
-              {stories.map((story, index) => (
-                <Link
-                  key={story.topic_id}
-                  href={`/article/${encodeURIComponent(story.topic_id)}`}
-                  className="group grid w-full gap-6 rounded-xl border border-border bg-card p-6 text-left transition-colors hover:border-foreground/40 md:grid-cols-[1fr_auto] md:items-center md:p-7"
-                >
-                  <div>
-                    <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span>{story.sources_preview.map((source) => source.name).slice(0, 3).join(' / ')}</span>
-                      <span aria-hidden="true">/</span>
-                      <span>{String(index + 1).padStart(2, '0')}</span>
-                    </div>
-                    <h3 className="max-w-2xl font-serif text-2xl leading-tight tracking-[-0.025em] text-foreground transition-colors group-hover:text-accent md:text-[27px]">
-                      {story.neutral_headline}
-                    </h3>
-                    <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{story.snippet}</p>
-                  </div>
-                  <div className="flex items-center gap-2 self-end whitespace-nowrap text-xs font-medium text-muted-foreground md:self-center">
-                    <Newspaper size={15} strokeWidth={1.6} />
-                    <span>{story.source_count} sources</span>
-                    <ChevronRight size={16} className="ml-2 text-accent transition-transform group-hover:translate-x-1" />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : null}
-          {!loading && !error && (
-            <div className="mt-6 flex flex-col items-center gap-3">
-              {moreError && (
-                <p className="text-sm text-destructive">{moreError}</p>
-              )}
-              <button
-                onClick={fetchMore}
-                disabled={fetchingMore || noMoreStories}
-                className="flex items-center gap-2 rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {fetchingMore ? (
-                  <>
-                    <Loader2 size={15} className="animate-spin" />
-                    Loading more…
-                  </>
-                ) : noMoreStories ? (
-                  'No more stories available'
-                ) : (
-                  'Fetch more stories'
-                )}
-              </button>
-            </div>
-          )}
-        </section>
-      </main>
-    </>
-  )
-}
 
-function HomeSkeleton() {
-  return (
-    <div className="grid gap-3" aria-label="Loading stories">
-      {Array.from({ length: 4 }).map((_, index) => (
-        <div key={index} className="grid gap-6 rounded-xl border border-border bg-card/60 p-6 md:grid-cols-[1fr_auto] md:items-center md:p-7">
-          <div>
-            <div className="mb-4 h-3 w-44 rounded bg-muted" />
-            <div className="h-8 max-w-2xl rounded bg-muted" />
-            <div className="mt-3 h-4 max-w-xl rounded bg-muted" />
-            <div className="mt-2 h-4 max-w-lg rounded bg-muted" />
+      <section className="border-b border-border py-16 md:py-24">
+        <div className="mx-auto max-w-6xl px-5 md:px-8">
+          <div className="grid gap-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.72fr)] lg:gap-20">
+            <div>
+              <p className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+                About Mosaic
+              </p>
+              <h2 className="font-serif text-3xl leading-tight tracking-[-0.03em] text-foreground sm:text-4xl md:text-5xl">
+                Understanding the news shouldn't require reading ten different sites.
+              </h2>
+              <div className="mt-8 space-y-6 text-base leading-relaxed text-muted-foreground">
+                <p>
+                  Every media outlet brings its own lens, emphasis, and framing to breaking stories. Reading a single source often leaves you with only a fragment of the truth.
+                </p>
+                <p>
+                  Mosaic automatically collects coverage across diverse reporting outlets and turns it into a single, considered analysis. Instead of flattening disagreement or pretending every source sees a story the same way, we make those differences transparent and accessible.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col justify-center space-y-5">
+              <div className="rounded-2xl border border-border bg-card p-7 shadow-xs">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  <Layers3 size={16} className="text-accent" /> What Mosaic Delivers
+                </div>
+                <ul className="mt-6 space-y-5 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-3">
+                    <ShieldCheck size={18} className="mt-0.5 shrink-0 text-accent" />
+                    <span>Fact consensus identified across independent sources.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <GitBranch size={18} className="mt-0.5 shrink-0 text-accent" />
+                    <span>Framing and key narrative divergences made clear.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Percent size={18} className="mt-0.5 shrink-0 text-accent" />
+                    <span>Source overlap percentages calculated objectively.</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
-          <div className="h-4 w-24 rounded bg-muted" />
         </div>
-      ))}
+      </section>
+
+      <section className="border-b border-border bg-card/40 py-16 md:py-24">
+        <div className="mx-auto max-w-6xl px-5 md:px-8">
+          <div className="text-center">
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+              How It Works
+            </p>
+            <h2 className="font-serif text-3xl tracking-[-0.03em] text-foreground sm:text-4xl">
+              Three steps to a clearer perspective
+            </h2>
+          </div>
+
+          <div className="mt-14 grid gap-8 md:grid-cols-3">
+            <div className="rounded-xl border border-border bg-card p-8">
+              <div className="mb-5 flex size-10 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                <Layers3 size={20} />
+              </div>
+              <h3 className="font-serif text-xl font-medium tracking-tight text-foreground">
+                1. Gather Coverage
+              </h3>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                We ingest real-time news articles covering the same global events across multiple independent reporting outlets.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-8">
+              <div className="mb-5 flex size-10 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                <GitBranch size={20} />
+              </div>
+              <h3 className="font-serif text-xl font-medium tracking-tight text-foreground">
+                2. Cross-Compare Claims
+              </h3>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                Our analysis engine maps reported claims to separate agreed-upon facts from differing stances, framing, and tone.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-8">
+              <div className="mb-5 flex size-10 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                <Percent size={20} />
+              </div>
+              <h3 className="font-serif text-xl font-medium tracking-tight text-foreground">
+                3. Synthesize Insights
+              </h3>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                We present a balanced narrative along with source overlap metrics and direct links back to original reporting.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-20 md:py-28">
+        <div className="mx-auto max-w-4xl px-5 text-center md:px-8">
+          <h2 className="font-serif text-3xl tracking-[-0.03em] text-foreground sm:text-4xl md:text-5xl">
+            Explore stories from every angle today.
+          </h2>
+          <p className="mx-auto mt-5 max-w-lg text-base text-muted-foreground">
+            Dive straight into current coverage and see where sources agree, differ, and reveal the full story.
+          </p>
+          <div className="mt-9">
+            <Link href="/news">
+              <GradientButton
+                variant="teal"
+                label="Read The News"
+                icon={<ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />}
+              />
+            </Link>
+          </div>
+        </div>
+      </section>
     </div>
   )
 }

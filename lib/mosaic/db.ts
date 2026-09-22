@@ -2,7 +2,6 @@ import { getSupabaseAdmin } from './supabase'
 import { stableHash, slugify } from './hash'
 import type {
   ArticleExtraction,
-  CategoryId,
   HomeStory,
   NormalizedArticle,
   ComparisonAnalysis,
@@ -16,7 +15,6 @@ const ONE_HOUR_MS = 60 * 60 * 1000
 
 type TopicRow = {
   id: string
-  category: CategoryId
   title_hint: string
   created_at: string
   updated_at: string
@@ -30,15 +28,13 @@ type ArticleRow = {
   published_at: string | null
   body: string
   url: string
-  category: CategoryId
 }
 
-export async function getLastIngestionAt(category: CategoryId) {
+export async function getLastIngestionAt() {
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from('ingestion_runs')
     .select('finished_at')
-    .eq('category', category)
     .eq('status', 'success')
     .order('finished_at', { ascending: false })
     .limit(1)
@@ -48,12 +44,12 @@ export async function getLastIngestionAt(category: CategoryId) {
   return data?.finished_at ? new Date(data.finished_at) : null
 }
 
-export async function needsIngestion(category: CategoryId) {
-  const last = await getLastIngestionAt(category)
+export async function needsIngestion() {
+  const last = await getLastIngestionAt()
   return !last || Date.now() - last.getTime() > ONE_HOUR_MS
 }
 
-export async function acquireIngestionLease(category: CategoryId, leaseTimeoutMs = 5 * 60 * 1000): Promise<boolean> {
+export async function acquireIngestionLease(leaseTimeoutMs = 5 * 60 * 1000): Promise<boolean> {
   const supabase = getSupabaseAdmin()
   const now = new Date()
   const lockThreshold = new Date(now.getTime() - leaseTimeoutMs).toISOString()
@@ -61,7 +57,6 @@ export async function acquireIngestionLease(category: CategoryId, leaseTimeoutMs
   const { data: recentRunning } = await supabase
     .from('ingestion_runs')
     .select('id, details, finished_at')
-    .eq('category', category)
     .eq('status', 'failed')
     .gte('finished_at', lockThreshold)
     .order('finished_at', { ascending: false })
@@ -77,7 +72,6 @@ export async function acquireIngestionLease(category: CategoryId, leaseTimeoutMs
   }
 
   const { error } = await supabase.from('ingestion_runs').insert({
-    category,
     status: 'failed',
     details: { lock: true, started_at: now.toISOString() },
     finished_at: now.toISOString(),
@@ -86,13 +80,12 @@ export async function acquireIngestionLease(category: CategoryId, leaseTimeoutMs
   return !error
 }
 
-export async function releaseIngestionLease(category: CategoryId) {
+export async function releaseIngestionLease() {
   const supabase = getSupabaseAdmin()
   const lockThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString()
   const { data: activeLocks } = await supabase
     .from('ingestion_runs')
     .select('id, details')
-    .eq('category', category)
     .eq('status', 'failed')
     .gte('finished_at', lockThreshold)
 
@@ -105,10 +98,9 @@ export async function releaseIngestionLease(category: CategoryId) {
   }
 }
 
-export async function recordIngestionRun(category: CategoryId, status: 'success' | 'failed', details: unknown) {
+export async function recordIngestionRun(status: 'success' | 'failed', details: unknown) {
   const supabase = getSupabaseAdmin()
   const { error } = await supabase.from('ingestion_runs').insert({
-    category,
     status,
     details,
     finished_at: new Date().toISOString(),
@@ -127,7 +119,6 @@ export async function upsertArticlesAndTopics(articles: NormalizedArticle[]) {
     published_at: article.published_at,
     body: article.body,
     url: article.url,
-    category: article.category,
   }))
 
   const { error: articleError } = await supabase.from('news_articles').upsert(articleRows, { onConflict: 'url' })
@@ -144,7 +135,6 @@ export async function upsertArticlesAndTopics(articles: NormalizedArticle[]) {
     const { error: topicError } = await supabase.from('topics').upsert(
       {
         id: topicId,
-        category: cluster[0].category,
         title_hint: titleHint,
         updated_at: now,
       },
@@ -275,21 +265,9 @@ function sourceDomain(url: string) {
   }
 }
 
-export async function rebuildTopicsForCategory(category: CategoryId) {
+export async function deleteInvalidTopics() {
   const supabase = getSupabaseAdmin()
-  const { data, error } = await supabase
-    .from('news_articles')
-    .select('id, source, headline, author, published_at, body, url, category')
-    .eq('category', category)
-
-  if (error) throw createMosaicError('SUPABASE_ARTICLES_SELECT_FAILED', 'Could not read stored articles for reclustering.', error)
-
-  await upsertArticlesAndTopics(((data ?? []) as ArticleRow[]).map(articleRowToNormalized))
-}
-
-export async function deleteInvalidTopics(category: CategoryId) {
-  const supabase = getSupabaseAdmin()
-  const { data, error } = await supabase.from('topics').select('id').eq('category', category)
+  const { data, error } = await supabase.from('topics').select('id')
   if (error) throw createMosaicError('SUPABASE_TOPICS_SELECT_FAILED', 'Could not read topics for validation.', error)
 
   for (const topic of data ?? []) {
@@ -309,16 +287,14 @@ function articleRowToNormalized(article: ArticleRow): NormalizedArticle {
     published_at: article.published_at,
     body: article.body,
     url: article.url,
-    category: article.category,
   }
 }
 
-export async function getTopicsNeedingHomepageCards(category: CategoryId) {
+export async function getTopicsNeedingHomepageCards() {
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from('topics')
-    .select('id, category, title_hint, created_at, updated_at')
-    .eq('category', category)
+    .select('id, title_hint, created_at, updated_at')
     .order('updated_at', { ascending: false })
     .limit(8)
 
@@ -326,12 +302,11 @@ export async function getTopicsNeedingHomepageCards(category: CategoryId) {
   return (data ?? []) as TopicRow[]
 }
 
-export async function getHomeStories(category: CategoryId, limit = 6, offset = 0): Promise<HomeStory[]> {
+export async function getHomeStories(limit = 6, offset = 0): Promise<HomeStory[]> {
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from('homepage_story_cache')
-    .select('topic_id, neutral_headline, snippet, source_count, sources_preview, category, updated_at')
-    .eq('category', category)
+    .select('topic_id, neutral_headline, snippet, source_count, sources_preview, updated_at')
     .order('updated_at', { ascending: false })
     .range(offset, offset + limit - 1)
 
@@ -339,30 +314,17 @@ export async function getHomeStories(category: CategoryId, limit = 6, offset = 0
   return (data ?? []) as HomeStory[]
 }
 
-export async function countHomeStories(category: CategoryId): Promise<number> {
-  const supabase = getSupabaseAdmin()
-  const { count, error } = await supabase
-    .from('homepage_story_cache')
-    .select('topic_id', { count: 'exact', head: true })
-    .eq('category', category)
-
-  if (error) return 0
-  return count ?? 0
-}
-
-export async function getUncachedTopicsForCategory(category: CategoryId, limit = 3): Promise<TopicRow[]> {
+export async function getUncachedTopics(limit = 3): Promise<TopicRow[]> {
   const supabase = getSupabaseAdmin()
   const { data: cached } = await supabase
     .from('homepage_story_cache')
     .select('topic_id')
-    .eq('category', category)
 
   const cachedIds = (cached ?? []).map((row) => row.topic_id)
 
   let query = supabase
     .from('topics')
-    .select('id, category, title_hint, created_at, updated_at')
-    .eq('category', category)
+    .select('id, title_hint, created_at, updated_at')
     .order('updated_at', { ascending: false })
     .limit(limit)
 
@@ -383,9 +345,9 @@ export async function upsertHomepageCards(stories: HomeStory[]) {
   if (error) throw createMosaicError('SUPABASE_HOME_STORIES_UPSERT_FAILED', 'Could not cache homepage stories.', error)
 }
 
-export async function clearHomepageCache(category: CategoryId) {
+export async function clearHomepageCache() {
   const supabase = getSupabaseAdmin()
-  const { error } = await supabase.from('homepage_story_cache').delete().eq('category', category)
+  const { error } = await supabase.from('homepage_story_cache').delete().neq('topic_id', '')
   if (error) throw createMosaicError('SUPABASE_HOME_STORIES_DELETE_FAILED', 'Could not clear stale homepage cache.', error)
 }
 
@@ -393,7 +355,7 @@ export async function getArticlesForTopic(topicId: string): Promise<ArticleRow[]
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from('topic_articles')
-    .select('news_articles(id, source, headline, author, published_at, body, url, category)')
+    .select('news_articles(id, source, headline, author, published_at, body, url)')
     .eq('topic_id', topicId)
 
   if (error) throw createMosaicError('SUPABASE_TOPIC_ARTICLES_FAILED', 'Could not read source articles for this topic.', error)
@@ -408,7 +370,7 @@ export async function getTopicMeta(topicId: string): Promise<TopicMeta> {
   const supabase = getSupabaseAdmin()
   const { data: homepageStory, error: homepageStoryError } = await supabase
     .from('homepage_story_cache')
-    .select('topic_id, neutral_headline, snippet, source_count, category')
+    .select('topic_id, neutral_headline, snippet, source_count')
     .eq('topic_id', topicId)
     .maybeSingle()
 
@@ -426,7 +388,6 @@ export async function getTopicMeta(topicId: string): Promise<TopicMeta> {
     topic_id: topicId,
     neutral_headline: homepageStory.neutral_headline,
     snippet: homepageStory.snippet,
-    category: homepageStory.category,
     published_at: published,
     source_count: articles.length,
     sources: articles.map<TopicSource>((article) => ({

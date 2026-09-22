@@ -1,8 +1,6 @@
-import { CATEGORIES } from './categories'
 import {
   acquireIngestionLease,
   clearHomepageCache,
-  countHomeStories,
   deleteInvalidTopics,
   getArticlesForTopic,
   getCachedComparison,
@@ -10,7 +8,7 @@ import {
   getCachedNarrative,
   getHomeStories,
   getTopicsNeedingHomepageCards,
-  getUncachedTopicsForCategory,
+  getUncachedTopics,
   needsIngestion,
   recordIngestionRun,
   releaseIngestionLease,
@@ -22,58 +20,39 @@ import {
 } from './db'
 import { createMosaicError } from './env'
 import { extractArticleClaims, generateHomepageCardForTopic, synthesizeComparison, writeNarrative } from './gemini'
-import { fetchNewsForCategory } from './news'
-import type { CategoryId, ComparisonAnalysis, HomeStory, NarrativeAnalysis, NormalizedArticle } from './types'
+import { fetchAllNews } from './news'
+import type { ComparisonAnalysis, HomeStory, NarrativeAnalysis, NormalizedArticle } from './types'
 
 type TopicArticleRow = Awaited<ReturnType<typeof getArticlesForTopic>>[number]
 
-export async function ingestCategory(category: CategoryId) {
+export async function ingest() {
   try {
-    const result = await fetchNewsForCategory(category)
+    const result = await fetchAllNews()
     await upsertArticlesAndTopics(result.articles)
-    await recordIngestionRun(category, 'success', {
+    await recordIngestionRun('success', {
       succeeded: result.succeeded,
       failed: result.failed,
       article_count: result.articles.length,
     })
     return result
   } catch (error) {
-    await recordIngestionRun(category, 'failed', error instanceof Error ? { message: error.message } : error).catch(() => undefined)
+    await recordIngestionRun('failed', error instanceof Error ? { message: error.message } : error).catch(() => undefined)
     throw error
   }
 }
 
-export async function ingestAllCategories() {
-  const results = await Promise.allSettled(CATEGORIES.map((category) => refreshHomepageCategory(category.id)))
-  const failures = results
-    .map((result, index) => ({ result, category: CATEGORIES[index].id }))
-    .filter((item) => item.result.status === 'rejected')
-
-  if (failures.length === CATEGORIES.length) {
-    throw createMosaicError('INGEST_ALL_CATEGORIES_FAILED', 'Hourly ingestion failed for every category.', failures)
-  }
-
-  return {
-    succeeded: results.length - failures.length,
-    failed: failures.map((item) => ({
-      category: item.category,
-      reason: item.result.status === 'rejected' ? String(item.result.reason) : null,
-    })),
-  }
-}
-
-export async function getCachedHomepage(category: CategoryId, limit = 6, offset = 0): Promise<HomeStory[]> {
-  const stories = await getHomeStories(category, limit, offset)
+export async function getCachedHomepage(limit = 6, offset = 0): Promise<HomeStory[]> {
+  const stories = await getHomeStories(limit, offset)
 
   if (!stories.length && offset === 0) {
-    throw createMosaicError('NO_HOME_STORIES', 'No homepage stories are cached for this category yet.')
+    throw createMosaicError('NO_HOME_STORIES', 'No homepage stories are cached yet.')
   }
 
   return stories
 }
 
-export async function generateMoreHomepageCards(category: CategoryId, count = 3): Promise<HomeStory[]> {
-  const topics = await getUncachedTopicsForCategory(category, count)
+export async function generateMoreHomepageCards(count = 3): Promise<HomeStory[]> {
+  const topics = await getUncachedTopics(count)
   if (!topics.length) return []
 
   const generated = await mapWithConcurrency(topics, 2, async (topic) => {
@@ -82,7 +61,6 @@ export async function generateMoreHomepageCards(category: CategoryId, count = 3)
 
     return generateHomepageCardForTopic({
       topic_id: topic.id,
-      category,
       articles: articles.map(articleRowToNormalized),
     })
   })
@@ -94,46 +72,39 @@ export async function generateMoreHomepageCards(category: CategoryId, count = 3)
   return stories
 }
 
-export async function refreshHomepageCategory(category: CategoryId) {
-  const acquired = await acquireIngestionLease(category)
+export async function refreshHomepageCategory() {
+  const acquired = await acquireIngestionLease()
   if (!acquired) {
-    const existing = await getHomeStories(category)
-    return {
-      category,
-      story_count: existing.length,
-    }
+    const existing = await getHomeStories()
+    return { story_count: existing.length }
   }
 
   try {
-    const stale = await needsIngestion(category)
+    const stale = await needsIngestion()
 
     if (stale) {
-      await clearHomepageCache(category)
-      await ingestCategory(category)
+      await clearHomepageCache()
+      await ingest()
     }
 
-    await deleteInvalidTopics(category)
-    await regenerateHomepageCards(category)
-    const stories = await getHomeStories(category)
+    await deleteInvalidTopics()
+    await regenerateHomepageCards()
+    const stories = await getHomeStories()
 
-    return {
-      category,
-      story_count: stories.length,
-    }
+    return { story_count: stories.length }
   } finally {
-    await releaseIngestionLease(category).catch(() => undefined)
+    await releaseIngestionLease().catch(() => undefined)
   }
 }
 
-export async function regenerateHomepageCards(category: CategoryId) {
-  const topics = await getTopicsNeedingHomepageCards(category)
+export async function regenerateHomepageCards() {
+  const topics = await getTopicsNeedingHomepageCards()
   const generated = await mapWithConcurrency(topics, 2, async (topic) => {
     const articles = await getArticlesForTopic(topic.id)
     if (articles.length < 2) return null
 
     return generateHomepageCardForTopic({
       topic_id: topic.id,
-      category,
       articles: articles.map(articleRowToNormalized),
     })
   })
@@ -202,7 +173,6 @@ function articleRowToNormalized(article: TopicArticleRow): NormalizedArticle {
     published_at: article.published_at,
     body: article.body,
     url: article.url,
-    category: article.category,
   }
 }
 
