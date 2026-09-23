@@ -20,7 +20,7 @@ import {
 } from './db'
 import { createMosaicError } from './env'
 import { extractArticleClaims, generateHomepageCardForTopic, synthesizeComparison, writeNarrative } from './gemini'
-import { fetchAllNews } from './news'
+import { fetchAllNews, fetchGNews, fetchNewsData, fetchCurrents } from './news'
 import type { ComparisonAnalysis, HomeStory, NarrativeAnalysis, NormalizedArticle } from './types'
 
 type TopicArticleRow = Awaited<ReturnType<typeof getArticlesForTopic>>[number]
@@ -72,16 +72,14 @@ export async function generateMoreHomepageCards(count = 3): Promise<HomeStory[]>
   return stories
 }
 
-export async function refreshHomepageCategory() {
+export async function refreshSegment(segment: 'initial' | 'rest' | 'all' = 'all') {
   const acquired = await acquireIngestionLease()
   if (!acquired) {
     const stale = await needsIngestion()
     if (!stale) {
-      // Another instance is actively running and data is still fresh — return what we have
       const existing = await getHomeStories()
       return { story_count: existing.length }
     }
-    // Data is stale and the lock appears stuck (dead serverless run) — force-clear and proceed
     await releaseIngestionLease().catch(() => undefined)
   }
 
@@ -89,18 +87,47 @@ export async function refreshHomepageCategory() {
     const stale = await needsIngestion()
 
     if (stale) {
-      await clearHomepageCache()
-      await ingest()
+      if (segment === 'initial') {
+        const p1 = await fetchGNews().catch(() => null)
+        if (p1 && p1.articles.length) {
+          await upsertArticlesAndTopics(p1.articles)
+          await deleteInvalidTopics()
+          await regenerateHomepageCards()
+        }
+      } else if (segment === 'rest') {
+        const fetchP2 = fetchNewsData()
+        const fetchP3 = fetchCurrents()
+
+        const res2 = await fetchP2.catch(() => null)
+        if (res2 && res2.articles.length) {
+          await upsertArticlesAndTopics(res2.articles)
+          await deleteInvalidTopics()
+          await regenerateHomepageCards()
+        }
+
+        const res3 = await fetchP3.catch(() => null)
+        if (res3 && res3.articles.length) {
+          await upsertArticlesAndTopics(res3.articles)
+          await deleteInvalidTopics()
+          await regenerateHomepageCards()
+        }
+      } else {
+        await clearHomepageCache()
+        await ingest()
+        await deleteInvalidTopics()
+        await regenerateHomepageCards()
+      }
     }
 
-    await deleteInvalidTopics()
-    await regenerateHomepageCards()
     const stories = await getHomeStories()
-
     return { story_count: stories.length }
   } finally {
     await releaseIngestionLease().catch(() => undefined)
   }
+}
+
+export async function refreshHomepageCategory() {
+  return refreshSegment('all')
 }
 
 export async function regenerateHomepageCards() {

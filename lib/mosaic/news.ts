@@ -31,7 +31,7 @@ async function fetchJson(url: string): Promise<unknown> {
   return response.json()
 }
 
-async function fetchGNews(): Promise<ProviderResult> {
+export async function fetchGNews(): Promise<ProviderResult> {
   const key = getEnv('GNEWS_API_KEY')
   const url = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&max=10&apikey=${key}`
 
@@ -53,7 +53,7 @@ async function fetchGNews(): Promise<ProviderResult> {
   }
 }
 
-async function fetchNewsData(): Promise<ProviderResult> {
+export async function fetchNewsData(): Promise<ProviderResult> {
   const key = getEnv('NEWSDATA_API_KEY')
   const url = `https://newsdata.io/api/1/news?apikey=${key}&language=en&q=${encodeURIComponent(GENERAL_QUERY)}`
 
@@ -75,7 +75,7 @@ async function fetchNewsData(): Promise<ProviderResult> {
   }
 }
 
-async function fetchCurrents(): Promise<ProviderResult> {
+export async function fetchCurrents(): Promise<ProviderResult> {
   const key = getEnv('CURRENTS_API_KEY')
   const url = `https://api.currentsapi.services/v1/search?apiKey=${key}&language=en&keywords=${encodeURIComponent(GENERAL_QUERY)}`
 
@@ -117,7 +117,7 @@ export async function fetchAllNews() {
   return { articles, succeeded, failed }
 }
 
-function dedupeArticles(articles: NormalizedArticle[]) {
+export function dedupeArticles(articles: NormalizedArticle[]) {
   const seen = new Map<string, NormalizedArticle>()
 
   for (const article of articles) {

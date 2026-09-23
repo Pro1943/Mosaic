@@ -37,7 +37,7 @@ export function NewsClient() {
       setError(null)
 
       try {
-        const response = await fetch('/api/home', {
+        const response = await fetch('/api/home?segment=rest', {
           signal: controller.signal,
           cache: 'no-store',
         })

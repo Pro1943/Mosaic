@@ -1,11 +1,16 @@
 'use client'
 
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowRight, GitBranch, Layers3, Percent, ShieldCheck } from 'lucide-react'
 import { TypewriterTitle } from './typewriter-title'
 import { GradientButton } from './ui/gradient-button'
 
 export function HomeClient() {
+  useEffect(() => {
+    fetch('/api/home?segment=initial', { cache: 'no-store' }).catch(() => undefined)
+  }, [])
+
   return (
     <div className="flex flex-col">
       <section className="relative overflow-hidden border-b border-border bg-gradient-to-b from-background via-card/50 to-background py-16 md:py-28">
