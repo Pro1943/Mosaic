@@ -27,7 +27,9 @@ export async function GET(request: Request) {
       })
     }
 
-    return NextResponse.json({ stories })
+    const status = stories.length === 0 ? 'processing' : isStale ? 'refreshing' : 'ready'
+
+    return NextResponse.json({ stories, status })
   } catch (error) {
     return NextResponse.json({ error: toMosaicError(error, 'HOME_FEED_FAILED') }, { status: 500 })
   }

@@ -10,11 +10,13 @@ import { GradientButton } from './ui/gradient-button'
 
 type HomeResponse = {
   stories?: HomeStory[]
+  status?: 'ready' | 'processing' | 'refreshing'
   error?: MosaicError
 }
 
 type MoreResponse = {
   stories?: HomeStory[]
+  status?: 'ready' | 'processing'
   error?: MosaicError
 }
 
@@ -28,49 +30,66 @@ export function NewsClient() {
   const [cooldownRemaining, setCooldownRemaining] = useState<number>(0)
 
   useEffect(() => {
-    const controller = new AbortController()
-    setNoMoreStories(false)
-    setMoreError(null)
+    let timerId: NodeJS.Timeout | null = null
+    let isMounted = true
 
-    async function loadStories() {
-      setLoading(true)
-      setError(null)
-
+    async function checkFeed() {
       try {
-        const response = await fetch('/api/home?segment=rest', {
-          signal: controller.signal,
-          cache: 'no-store',
-        })
+        const response = await fetch('/api/home?segment=rest', { cache: 'no-store' })
         const contentType = response.headers.get('content-type') ?? ''
         if (!contentType.includes('application/json')) {
-          setStories([])
-          setError({ code: `HTTP_${response.status}`, message: `Server returned non-JSON response (${response.statusText || 'Error'})` })
+          if (isMounted) {
+            setError({ code: `HTTP_${response.status}`, message: `Server returned non-JSON response` })
+            setLoading(false)
+          }
           return
         }
+
         const payload = (await response.json()) as HomeResponse
+        if (!isMounted) return
 
         if (!response.ok || payload.error) {
-          setStories([])
           setError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
+          setLoading(false)
           return
         }
 
-        setStories(payload.stories ?? [])
-      } catch (requestError) {
-        if (!controller.signal.aborted) {
-          setStories([])
+        const incoming = payload.stories ?? []
+        const currentStatus = payload.status ?? 'ready'
+
+        if (incoming.length > 0) {
+          setStories(incoming)
+          if (currentStatus !== 'processing') {
+            timerId = setTimeout(() => {
+              if (isMounted) setLoading(false)
+            }, 1000)
+          }
+        }
+
+        if (currentStatus === 'processing' || (currentStatus === 'refreshing' && incoming.length === 0)) {
+          timerId = setTimeout(checkFeed, 1500)
+        } else {
+          if (incoming.length === 0 && currentStatus === 'ready') {
+            setLoading(false)
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
           setError({
             code: 'HOME_REQUEST_FAILED',
-            message: requestError instanceof Error ? requestError.message : 'Could not request the news feed.',
+            message: err instanceof Error ? err.message : 'Could not request news feed',
           })
+          setLoading(false)
         }
-      } finally {
-        if (!controller.signal.aborted) setLoading(false)
       }
     }
 
-    loadStories()
-    return () => controller.abort()
+    checkFeed()
+
+    return () => {
+      isMounted = false
+      if (timerId) clearTimeout(timerId)
+    }
   }, [])
 
   useEffect(() => {
@@ -94,44 +113,54 @@ export function NewsClient() {
     setFetchingMore(true)
     setMoreError(null)
 
-    try {
-      const offset = stories.length
-      const response = await fetch(`/api/home/more?offset=${offset}`, {
-        cache: 'no-store',
-      })
-      const contentType = response.headers.get('content-type') ?? ''
-      if (!contentType.includes('application/json')) {
-        setMoreError('Failed to fetch')
+    const offset = stories.length
+    let attempts = 0
+
+    async function pollMore() {
+      attempts += 1
+      try {
+        const response = await fetch(`/api/home/more?offset=${offset}`, { cache: 'no-store' })
+        const contentType = response.headers.get('content-type') ?? ''
+        if (!contentType.includes('application/json')) {
+          setMoreError('Failed to fetch')
+          setCooldownRemaining(300)
+          setFetchingMore(false)
+          return
+        }
+
+        const payload = (await response.json()) as MoreResponse
+        if (!response.ok || payload.error) {
+          setMoreError(payload.error?.message ?? 'Failed to fetch')
+          setCooldownRemaining(300)
+          setFetchingMore(false)
+          return
+        }
+
+        const incoming = payload.stories ?? []
+        const status = payload.status ?? 'ready'
+
+        if (incoming.length > 0) {
+          const existingIds = new Set(stories.map((s) => s.topic_id))
+          const fresh = incoming.filter((s) => !existingIds.has(s.topic_id))
+          setStories((prev) => [...prev, ...fresh])
+          setTimeout(() => setFetchingMore(false), 1000)
+          return
+        }
+
+        if (status === 'processing' && attempts < 8) {
+          setTimeout(pollMore, 1500)
+        } else {
+          setNoMoreStories(true)
+          setFetchingMore(false)
+        }
+      } catch (err) {
+        setMoreError(err instanceof Error ? err.message : 'Failed to fetch')
         setCooldownRemaining(300)
-        return
+        setFetchingMore(false)
       }
-      const payload = (await response.json()) as MoreResponse
-
-      if (!response.ok || payload.error) {
-        setMoreError(payload.error?.message ?? 'Failed to fetch')
-        setCooldownRemaining(300)
-        return
-      }
-
-      const incoming = payload.stories ?? []
-      if (incoming.length === 0) {
-        setNoMoreStories(true)
-        return
-      }
-
-      const existingIds = new Set(stories.map((s) => s.topic_id))
-      const fresh = incoming.filter((s) => !existingIds.has(s.topic_id))
-      setStories((prev) => [...prev, ...fresh])
-
-      if (fresh.length === 0) {
-        setNoMoreStories(true)
-      }
-    } catch (err) {
-      setMoreError(err instanceof Error ? err.message : 'Failed to fetch')
-      setCooldownRemaining(300)
-    } finally {
-      setFetchingMore(false)
     }
+
+    pollMore()
   }
 
   function formatTime(seconds: number) {
