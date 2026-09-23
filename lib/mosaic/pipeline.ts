@@ -75,8 +75,14 @@ export async function generateMoreHomepageCards(count = 3): Promise<HomeStory[]>
 export async function refreshHomepageCategory() {
   const acquired = await acquireIngestionLease()
   if (!acquired) {
-    const existing = await getHomeStories()
-    return { story_count: existing.length }
+    const stale = await needsIngestion()
+    if (!stale) {
+      // Another instance is actively running and data is still fresh — return what we have
+      const existing = await getHomeStories()
+      return { story_count: existing.length }
+    }
+    // Data is stale and the lock appears stuck (dead serverless run) — force-clear and proceed
+    await releaseIngestionLease().catch(() => undefined)
   }
 
   try {

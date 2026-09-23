@@ -49,7 +49,7 @@ export async function needsIngestion() {
   return !last || Date.now() - last.getTime() > ONE_HOUR_MS
 }
 
-export async function acquireIngestionLease(leaseTimeoutMs = 5 * 60 * 1000): Promise<boolean> {
+export async function acquireIngestionLease(leaseTimeoutMs = 55 * 1000): Promise<boolean> {
   const supabase = getSupabaseAdmin()
   const now = new Date()
   const lockThreshold = new Date(now.getTime() - leaseTimeoutMs).toISOString()

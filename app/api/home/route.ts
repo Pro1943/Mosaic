@@ -5,7 +5,7 @@ import { getLastIngestionAt } from '@/lib/mosaic/db'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-export const maxDuration = 300
+export const maxDuration = 60
 
 const ONE_HOUR_MS = 60 * 60 * 1000
 
