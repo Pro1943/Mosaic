@@ -2,6 +2,7 @@ import {
   acquireIngestionLease,
   clearHomepageCache,
   deleteInvalidTopics,
+  deleteOldStories,
   getArticlesForTopic,
   getCachedComparison,
   getCachedExtractions,
@@ -87,6 +88,7 @@ export async function refreshSegment(segment: 'initial' | 'rest' | 'all' = 'all'
     const stale = await needsIngestion()
 
     if (stale) {
+      await deleteOldStories(5)
       if (segment === 'initial') {
         const p1 = await fetchGNews().catch(() => null)
         if (p1 && p1.articles.length) {

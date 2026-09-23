@@ -307,25 +307,19 @@ export async function getHomeStories(limit = 6, offset = 0): Promise<HomeStory[]
   const { data, error } = await supabase
     .from('homepage_story_cache')
     .select('topic_id, neutral_headline, snippet, source_count, sources_preview, updated_at')
+    .order('updated_at', { ascending: false })
+    .order('source_count', { ascending: false })
+    .range(offset, offset + limit - 1)
 
   if (error) throw createMosaicError('SUPABASE_HOME_STORIES_SELECT_FAILED', 'Could not read homepage stories from Supabase.', error)
+  return (data ?? []) as HomeStory[]
+}
 
-  const list = (data ?? []) as HomeStory[]
-  list.sort((a, b) => {
-    const timeA = new Date(a.updated_at).getTime()
-    const timeB = new Date(b.updated_at).getTime()
-    const bucketA = Math.floor(timeA / (1000 * 60 * 60 * 12))
-    const bucketB = Math.floor(timeB / (1000 * 60 * 60 * 12))
-    if (bucketA !== bucketB) {
-      return bucketB - bucketA
-    }
-    if (b.source_count !== a.source_count) {
-      return b.source_count - a.source_count
-    }
-    return timeB - timeA
-  })
-
-  return list.slice(offset, offset + limit)
+export async function deleteOldStories(days = 5) {
+  const supabase = getSupabaseAdmin()
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  await supabase.from('homepage_story_cache').delete().lt('updated_at', cutoff)
+  await supabase.from('topics').delete().lt('updated_at', cutoff)
 }
 
 export async function getUncachedTopics(limit = 3): Promise<TopicRow[]> {
