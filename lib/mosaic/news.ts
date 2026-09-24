@@ -8,7 +8,7 @@ type ProviderResult = {
 }
 
 const USER_AGENT = 'MosaicNewsComparison/0.1'
-const GENERAL_QUERY = 'world news diplomacy economy markets technology science'
+const GENERAL_QUERY = 'world'
 
 function asText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''

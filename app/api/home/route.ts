@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const ONE_HOUR_MS = 60 * 60 * 1000
+const STALE_MS = 15 * 60 * 1000
 
 export async function GET(request: Request) {
   try {
@@ -18,9 +18,9 @@ export async function GET(request: Request) {
 
     let stories = await getCachedHomepage().catch(() => [] as Awaited<ReturnType<typeof getCachedHomepage>>)
     const lastFetch = await getLastIngestionAt()
-    const isStale = !lastFetch || Date.now() - lastFetch.getTime() > ONE_HOUR_MS
+    const isStale = !lastFetch || Date.now() - lastFetch.getTime() > STALE_MS || stories.length < 5
 
-    if (stories.length === 0 || isStale) {
+    if (stories.length < 5 || isStale) {
       if (segment === 'initial' || stories.length === 0) {
         await refreshSegment('initial').catch(() => undefined)
         stories = await getCachedHomepage().catch(() => [])
