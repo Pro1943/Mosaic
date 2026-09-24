@@ -16,14 +16,18 @@ export async function GET(request: Request) {
     const segmentParam = searchParams.get('segment') || 'all'
     const segment = (segmentParam === 'initial' ? 'initial' : segmentParam === 'rest' ? 'rest' : 'all') as 'initial' | 'rest' | 'all'
 
-    const stories = await getCachedHomepage().catch(() => [] as Awaited<ReturnType<typeof getCachedHomepage>>)
-
+    let stories = await getCachedHomepage().catch(() => [] as Awaited<ReturnType<typeof getCachedHomepage>>)
     const lastFetch = await getLastIngestionAt()
     const isStale = !lastFetch || Date.now() - lastFetch.getTime() > ONE_HOUR_MS
 
-    if (isStale || stories.length === 0) {
+    if (stories.length === 0 || isStale) {
+      if (segment === 'initial' || stories.length === 0) {
+        await refreshSegment('initial').catch(() => undefined)
+        stories = await getCachedHomepage().catch(() => [])
+      }
+
       after(async () => {
-        await refreshSegment(segment).catch(() => undefined)
+        await refreshSegment(segment === 'initial' ? 'rest' : segment).catch(() => undefined)
       })
     }
 

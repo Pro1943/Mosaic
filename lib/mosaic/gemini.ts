@@ -43,8 +43,18 @@ You must adhere strictly to these core principles across all operations:
 - Produce only valid JSON matching the requested schema.
 - Never include commentary, markdown backticks, or conversational text outside the structured JSON.`
 
+let keyIndex = 0
+
 function getClient() {
-  return new GoogleGenAI({ apiKey: getEnv('GEMINI_API_KEY') })
+  const keys = [
+    getOptionalEnv('GEMINI_API_KEY'),
+    getOptionalEnv('GEMINI_API_KEY_2'),
+    getOptionalEnv('GEMINI_API_KEY_3'),
+  ].filter(Boolean) as string[]
+
+  const apiKey = keys[keyIndex % keys.length] || getEnv('GEMINI_API_KEY')
+  keyIndex += 1
+  return new GoogleGenAI({ apiKey })
 }
 
 function modelsFromEnv(name: string, defaults: string[]) {

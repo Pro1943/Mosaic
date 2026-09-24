@@ -155,13 +155,14 @@ export async function upsertArticlesAndTopics(articles: NormalizedArticle[]) {
 function clusterArticles(articles: NormalizedArticle[]) {
   const validArticles = articles.filter(isNewsLikeArticle)
   const clusters: NormalizedArticle[][] = []
-  const repeatedTokens = repeatedHeadlineTokens(validArticles)
 
   for (const article of validArticles) {
     const tokens = headlineTokens(article.headline)
     const match = clusters.find((cluster) => {
-      const clusterTokens = new Set(cluster.flatMap((item) => [...headlineTokens(item.headline)]))
-      return jaccard(tokens, headlineTokens(cluster[0].headline)) >= 0.18 || [...tokens].some((token) => repeatedTokens.has(token) && clusterTokens.has(token))
+      const primaryTokens = headlineTokens(cluster[0].headline)
+      const shared = sharedTokenCount(tokens, primaryTokens)
+      const jaccardScore = jaccard(tokens, primaryTokens)
+      return jaccardScore >= 0.25 || shared >= 2
     })
 
     if (match) {
@@ -172,6 +173,10 @@ function clusterArticles(articles: NormalizedArticle[]) {
   }
 
   return clusters.filter(isValidCluster).sort((a, b) => b.length - a.length)
+}
+
+function sharedTokenCount(a: Set<string>, b: Set<string>) {
+  return [...a].filter((token) => b.has(token)).length
 }
 
 function headlineTokens(headline: string) {
@@ -197,6 +202,23 @@ function headlineTokens(headline: string) {
     'reports',
     'says',
     'said',
+    'new',
+    'first',
+    'latest',
+    'top',
+    'best',
+    'global',
+    'world',
+    'major',
+    'market',
+    'launch',
+    'launches',
+    'unveils',
+    'announces',
+    'deal',
+    'plan',
+    'rules',
+    'system',
   ])
   return new Set(
     headline
@@ -207,19 +229,6 @@ function headlineTokens(headline: string) {
   )
 }
 
-function repeatedHeadlineTokens(articles: NormalizedArticle[]) {
-  const tokenDomains = new Map<string, Set<string>>()
-
-  for (const article of articles) {
-    for (const token of headlineTokens(article.headline)) {
-      if (!tokenDomains.has(token)) tokenDomains.set(token, new Set())
-      tokenDomains.get(token)?.add(sourceDomain(article.url))
-    }
-  }
-
-  return new Set([...tokenDomains.entries()].filter(([, domains]) => domains.size >= 2).map(([token]) => token))
-}
-
 function jaccard(a: Set<string>, b: Set<string>) {
   const intersection = [...a].filter((token) => b.has(token)).length
   const union = new Set([...a, ...b]).size
@@ -228,7 +237,7 @@ function jaccard(a: Set<string>, b: Set<string>) {
 
 function isValidCluster(articles: NormalizedArticle[] | ArticleRow[]) {
   const newsArticles = articles.filter(isNewsLikeArticle)
-  return newsArticles.length >= 2 && new Set(newsArticles.map((article) => sourceDomain(article.url))).size >= 2
+  return newsArticles.length >= 1
 }
 
 function isNewsLikeArticle(article: Pick<NormalizedArticle, 'headline' | 'url' | 'body'>) {
