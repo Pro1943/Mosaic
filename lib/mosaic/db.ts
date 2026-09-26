@@ -219,6 +219,34 @@ function headlineTokens(headline: string) {
     'plan',
     'rules',
     'system',
+    'full',
+    'episode',
+    'guide',
+    'watch',
+    'live',
+    'update',
+    'updates',
+    'video',
+    'star',
+    'sign',
+    'horoscope',
+    'january',
+    'february',
+    'march',
+    'april',
+    'may',
+    'june',
+    'july',
+    'august',
+    'september',
+    'october',
+    'november',
+    'december',
+    '2024',
+    '2025',
+    '2026',
+    '2027',
+    '2028',
   ])
   return new Set(
     headline
@@ -253,8 +281,45 @@ function isNewsLikeArticle(article: Pick<NormalizedArticle, 'headline' | 'url' |
   const host = url.hostname.toLowerCase()
   const path = url.pathname.toLowerCase()
   const blockedHostPatterns = [/\.ac\.uk$/, /\.edu$/, /(^|\.)reddit\.com$/]
-  const blockedPathPatterns = [/\/courses?\//, /postgraduate/, /undergraduate/, /phd/, /supervisor/, /program/, /programme/, /degree/, /prospectus/]
-  const blockedHeadlinePatterns = [/find a phd/i, /\bmsc\b/i, /\bpgdip\b/i, /money, banking and finance/i, /social research/i]
+  const blockedPathPatterns = [
+    /\/courses?\//,
+    /postgraduate/,
+    /undergraduate/,
+    /phd/,
+    /supervisor/,
+    /program/,
+    /programme/,
+    /degree/,
+    /prospectus/,
+    /horoscope/,
+    /lottery/,
+    /puzzles/,
+    /crosswords/,
+  ]
+  const blockedHeadlinePatterns = [
+    /find a phd/i,
+    /\bmsc\b/i,
+    /\bpgdip\b/i,
+    /money, banking and finance/i,
+    /social research/i,
+    /horoscope/i,
+    /star sign/i,
+    /mystic meg/i,
+    /astrology/i,
+    /zodiac/i,
+    /lottery/i,
+    /lotto/i,
+    /powerball/i,
+    /mega millions/i,
+    /winning numbers/i,
+    /jackpot/i,
+    /full episode/i,
+    /tv guide/i,
+    /where to watch/i,
+    /crossword/i,
+    /wordle/i,
+    /sudoku/i,
+  ]
 
   return (
     !blockedHostPatterns.some((pattern) => pattern.test(host)) &&

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { AlertTriangle, ArrowLeft, ExternalLink, GitBranch, Info, Layers3, Percent } from 'lucide-react'
 import type { ComparisonAnalysis, MosaicError, NarrativeAnalysis, TopicMeta } from '@/lib/mosaic/types'
 import { ErrorPanel } from './mosaic-error'
@@ -24,12 +25,20 @@ type NarrativeResponse = {
 }
 
 export function ArticleClient({ topicId }: { topicId: string }) {
+  const router = useRouter()
   const [topic, setTopic] = useState<TopicMeta | null>(null)
   const [comparison, setComparison] = useState<ComparisonAnalysis | null>(null)
   const [narrative, setNarrative] = useState<NarrativeAnalysis | null>(null)
   const [metaError, setMetaError] = useState<MosaicError | null>(null)
   const [comparisonError, setComparisonError] = useState<MosaicError | null>(null)
   const [narrativeError, setNarrativeError] = useState<MosaicError | null>(null)
+
+  useEffect(() => {
+    const targetError = metaError || narrativeError || comparisonError
+    if (targetError) {
+      router.push(`/error?code=${encodeURIComponent(targetError.code)}&message=${encodeURIComponent(targetError.message)}`)
+    }
+  }, [metaError, narrativeError, comparisonError, router])
 
   useEffect(() => {
     const controller = new AbortController()

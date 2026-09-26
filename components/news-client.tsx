@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion } from 'motion/react'
 import { ChevronRight, Newspaper } from 'lucide-react'
 import type { HomeStory, MosaicError } from '@/lib/mosaic/types'
@@ -22,6 +23,7 @@ type MoreResponse = {
 }
 
 export function NewsClient() {
+  const router = useRouter()
   const [stories, setStories] = useState<HomeStory[]>([])
   const [error, setError] = useState<MosaicError | null>(null)
   const [loading, setLoading] = useState(true)
@@ -29,6 +31,12 @@ export function NewsClient() {
   const [noMoreStories, setNoMoreStories] = useState(false)
   const [moreError, setMoreError] = useState<string | null>(null)
   const [cooldownRemaining, setCooldownRemaining] = useState<number>(0)
+
+  useEffect(() => {
+    if (error) {
+      router.push(`/error?code=${encodeURIComponent(error.code)}&message=${encodeURIComponent(error.message)}`)
+    }
+  }, [error, router])
 
   useEffect(() => {
     let timerId: NodeJS.Timeout | null = null
