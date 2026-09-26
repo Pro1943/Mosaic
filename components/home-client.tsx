@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import Link from 'next/link'
+import { motion } from 'motion/react'
 import { ArrowRight, GitBranch, Layers3, Percent, ShieldCheck } from 'lucide-react'
 import { TypewriterTitle } from './typewriter-title'
 import { GradientButton } from './ui/gradient-button'
@@ -14,7 +15,12 @@ export function HomeClient() {
   return (
     <div className="flex flex-col">
       <section className="relative overflow-hidden border-b border-border bg-gradient-to-b from-background via-card/50 to-background py-16 md:py-28">
-        <div className="mx-auto max-w-5xl px-5 text-center md:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="mx-auto max-w-5xl px-5 text-center md:px-8"
+        >
           <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
             A Clearer View of the News
           </p>
@@ -28,10 +34,20 @@ export function HomeClient() {
             startDelay={300}
             loopDelay={1200}
           />
-          <p className="mx-auto -mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">
+          <motion.p
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="mx-auto -mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg"
+          >
             Mosaic brings together reporting from across the media spectrum, mapping out common ground, highlighting differences, and giving you the complete picture.
-          </p>
-          <div className="mt-10 flex items-center justify-center">
+          </motion.p>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="mt-10 flex items-center justify-center"
+          >
             <Link href="/news">
               <GradientButton
                 variant="teal"
@@ -39,11 +55,17 @@ export function HomeClient() {
                 icon={<ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />}
               />
             </Link>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
-      <section className="border-b border-border py-16 md:py-24">
+      <motion.section
+        initial={{ opacity: 0, y: 35 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-80px' }}
+        transition={{ duration: 0.7 }}
+        className="border-b border-border py-16 md:py-24"
+      >
         <div className="mx-auto max-w-6xl px-5 md:px-8">
           <div className="grid gap-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.72fr)] lg:gap-20">
             <div>
@@ -64,7 +86,11 @@ export function HomeClient() {
             </div>
 
             <div className="flex flex-col justify-center space-y-5">
-              <div className="rounded-2xl border border-border bg-card p-7 shadow-xs">
+              <motion.div
+                whileHover={{ y: -4 }}
+                transition={{ duration: 0.3 }}
+                className="rounded-2xl border border-border bg-card p-7 shadow-xs"
+              >
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   <Layers3 size={16} className="text-accent" /> What Mosaic Delivers
                 </div>
@@ -82,13 +108,19 @@ export function HomeClient() {
                     <span>Source overlap percentages calculated objectively.</span>
                   </li>
                 </ul>
-              </div>
+              </motion.div>
             </div>
           </div>
         </div>
-      </section>
+      </motion.section>
 
-      <section className="border-b border-border bg-card/40 py-16 md:py-24">
+      <motion.section
+        initial={{ opacity: 0, y: 35 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-80px' }}
+        transition={{ duration: 0.7 }}
+        className="border-b border-border bg-card/40 py-16 md:py-24"
+      >
         <div className="mx-auto max-w-6xl px-5 md:px-8">
           <div className="text-center">
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
@@ -99,8 +131,28 @@ export function HomeClient() {
             </h2>
           </div>
 
-          <div className="mt-14 grid gap-8 md:grid-cols-3">
-            <div className="rounded-xl border border-border bg-card p-8">
+          <motion.div
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '-50px' }}
+            variants={{
+              hidden: {},
+              show: {
+                transition: {
+                  staggerChildren: 0.15,
+                },
+              },
+            }}
+            className="mt-14 grid gap-8 md:grid-cols-3"
+          >
+            <motion.div
+              variants={{
+                hidden: { opacity: 0, y: 25, scale: 0.97 },
+                show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5 } },
+              }}
+              whileHover={{ y: -6, transition: { duration: 0.25 } }}
+              className="rounded-xl border border-border bg-card p-8 shadow-xs"
+            >
               <div className="mb-5 flex size-10 items-center justify-center rounded-lg bg-accent/10 text-accent">
                 <Layers3 size={20} />
               </div>
@@ -110,9 +162,16 @@ export function HomeClient() {
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 We ingest real-time news articles covering the same global events across multiple independent reporting outlets.
               </p>
-            </div>
+            </motion.div>
 
-            <div className="rounded-xl border border-border bg-card p-8">
+            <motion.div
+              variants={{
+                hidden: { opacity: 0, y: 25, scale: 0.97 },
+                show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5 } },
+              }}
+              whileHover={{ y: -6, transition: { duration: 0.25 } }}
+              className="rounded-xl border border-border bg-card p-8 shadow-xs"
+            >
               <div className="mb-5 flex size-10 items-center justify-center rounded-lg bg-accent/10 text-accent">
                 <GitBranch size={20} />
               </div>
@@ -122,9 +181,16 @@ export function HomeClient() {
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 Our analysis engine maps reported claims to separate agreed-upon facts from differing stances, framing, and tone.
               </p>
-            </div>
+            </motion.div>
 
-            <div className="rounded-xl border border-border bg-card p-8">
+            <motion.div
+              variants={{
+                hidden: { opacity: 0, y: 25, scale: 0.97 },
+                show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5 } },
+              }}
+              whileHover={{ y: -6, transition: { duration: 0.25 } }}
+              className="rounded-xl border border-border bg-card p-8 shadow-xs"
+            >
               <div className="mb-5 flex size-10 items-center justify-center rounded-lg bg-accent/10 text-accent">
                 <Percent size={20} />
               </div>
@@ -134,12 +200,18 @@ export function HomeClient() {
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 We present a balanced narrative along with source overlap metrics and direct links back to original reporting.
               </p>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         </div>
-      </section>
+      </motion.section>
 
-      <section className="py-20 md:py-28">
+      <motion.section
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.7 }}
+        className="py-20 md:py-28"
+      >
         <div className="mx-auto max-w-4xl px-5 text-center md:px-8">
           <h2 className="font-serif text-3xl tracking-[-0.03em] text-foreground sm:text-4xl md:text-5xl">
             Explore stories from every angle today.
@@ -157,7 +229,7 @@ export function HomeClient() {
             </Link>
           </div>
         </div>
-      </section>
+      </motion.section>
     </div>
   )
 }

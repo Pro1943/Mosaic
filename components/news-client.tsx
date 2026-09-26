@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { motion } from 'motion/react'
 import { ChevronRight, Newspaper } from 'lucide-react'
 import type { HomeStory, MosaicError } from '@/lib/mosaic/types'
 import { ErrorPanel } from './mosaic-error'
@@ -171,13 +172,18 @@ export function NewsClient() {
 
   return (
     <main id="latest" className="mx-auto max-w-6xl px-5 py-12 md:px-8 md:py-16">
-      <div className="mb-8 flex items-end justify-between border-b border-border pb-5">
+      <motion.div
+        initial={{ opacity: 0, y: -15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="mb-8 flex items-end justify-between border-b border-border pb-5"
+      >
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Latest Feed</p>
           <h1 className="mt-2 font-serif text-3xl tracking-[-0.03em] md:text-4xl">News Stories</h1>
         </div>
         <span className="hidden text-xs text-muted-foreground sm:block">Updated throughout the day</span>
-      </div>
+      </motion.div>
 
       {loading ? (
         <div className="py-12">
@@ -194,37 +200,49 @@ export function NewsClient() {
       {!loading && !error ? (
         <div className="grid gap-4">
           {stories.map((story, index) => (
-            <Link
+            <motion.div
               key={story.topic_id}
-              href={`/article/${encodeURIComponent(story.topic_id)}`}
-              className="group grid w-full gap-6 rounded-xl border border-border bg-card p-6 text-left transition-colors hover:border-foreground/40 md:grid-cols-[1fr_auto] md:items-center md:p-7"
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.4, delay: Math.min(index * 0.06, 0.4) }}
+              whileHover={{ y: -3, transition: { duration: 0.2 } }}
             >
-              <div>
-                <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span>{story.sources_preview.map((source) => source.name).slice(0, 3).join(' / ')}</span>
-                  <span aria-hidden="true">•</span>
-                  <span>{String(index + 1).padStart(2, '0')}</span>
+              <Link
+                href={`/article/${encodeURIComponent(story.topic_id)}`}
+                className="group grid w-full gap-6 rounded-xl border border-border bg-card p-6 text-left transition-colors hover:border-foreground/40 md:grid-cols-[1fr_auto] md:items-center md:p-7"
+              >
+                <div>
+                  <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>{story.sources_preview.map((source) => source.name).slice(0, 3).join(' / ')}</span>
+                    <span aria-hidden="true">•</span>
+                    <span>{String(index + 1).padStart(2, '0')}</span>
+                  </div>
+                  <h2 className="max-w-3xl font-serif text-2xl leading-tight tracking-[-0.025em] text-foreground transition-colors group-hover:text-accent md:text-[26px]">
+                    {story.neutral_headline}
+                  </h2>
+                  <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground line-clamp-3">
+                    {story.snippet}
+                  </p>
                 </div>
-                <h2 className="max-w-3xl font-serif text-2xl leading-tight tracking-[-0.025em] text-foreground transition-colors group-hover:text-accent md:text-[26px]">
-                  {story.neutral_headline}
-                </h2>
-                <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground line-clamp-3">
-                  {story.snippet}
-                </p>
-              </div>
 
-              <div className="flex items-center gap-2 self-end whitespace-nowrap text-xs font-medium text-muted-foreground md:self-center">
-                <Newspaper size={15} strokeWidth={1.6} />
-                <span>{story.source_count} sources</span>
-                <ChevronRight size={16} className="ml-1.5 text-accent transition-transform group-hover:translate-x-1" />
-              </div>
-            </Link>
+                <div className="flex items-center gap-2 self-end whitespace-nowrap text-xs font-medium text-muted-foreground md:self-center">
+                  <Newspaper size={15} strokeWidth={1.6} />
+                  <span>{story.source_count} sources</span>
+                  <ChevronRight size={16} className="ml-1.5 text-accent transition-transform group-hover:translate-x-1" />
+                </div>
+              </Link>
+            </motion.div>
           ))}
         </div>
       ) : null}
 
       {!loading && !error && (
-        <div className="mt-10 flex flex-col items-center gap-3">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="mt-10 flex flex-col items-center gap-3"
+        >
           {fetchingMore ? (
             <Loader
               title="Waiting for response from API..."
@@ -246,7 +264,7 @@ export function NewsClient() {
               label="Fetch More Stories"
             />
           )}
-        </div>
+        </motion.div>
       )}
     </main>
   )
