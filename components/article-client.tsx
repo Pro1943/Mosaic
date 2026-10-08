@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, ArrowLeft, ExternalLink, GitBranch, Info, Layers3, Percent } from 'lucide-react'
 import type { ComparisonAnalysis, MosaicError, NarrativeAnalysis, TopicMeta } from '@/lib/mosaic/types'
+import { getApiUrl } from '@/lib/mosaic/api'
 import { ErrorPanel } from './mosaic-error'
 import { Loader } from './ui/loader'
 import CountUp from './ui/count-up'
@@ -54,7 +55,7 @@ export function ArticleClient({ topicId }: { topicId: string }) {
 
     async function load() {
       try {
-        const { response, payload } = await requestJson<TopicResponse>(`/api/topics/${encodeURIComponent(topicId)}`)
+        const { response, payload } = await requestJson<TopicResponse>(getApiUrl(`/api/topics/${encodeURIComponent(topicId)}`))
         if (!response.ok || payload.error || !payload.topic) {
           setMetaError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
           return
@@ -68,7 +69,7 @@ export function ArticleClient({ topicId }: { topicId: string }) {
       }
 
       try {
-        const { response, payload } = await requestJson<ComparisonResponse>(`/api/topics/${encodeURIComponent(topicId)}/comparison`)
+        const { response, payload } = await requestJson<ComparisonResponse>(getApiUrl(`/api/topics/${encodeURIComponent(topicId)}/comparison`))
         if (!response.ok || payload.error || !payload.comparison) {
           setComparisonError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
         } else {
@@ -81,7 +82,7 @@ export function ArticleClient({ topicId }: { topicId: string }) {
       }
 
       try {
-        const { response, payload } = await requestJson<NarrativeResponse>(`/api/topics/${encodeURIComponent(topicId)}/narrative`)
+        const { response, payload } = await requestJson<NarrativeResponse>(getApiUrl(`/api/topics/${encodeURIComponent(topicId)}/narrative`))
         if (!response.ok || payload.error || !payload.narrative) {
           setNarrativeError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
         } else {

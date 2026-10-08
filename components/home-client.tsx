@@ -6,10 +6,11 @@ import { motion } from 'motion/react'
 import { ArrowRight, GitBranch, Layers3, Percent, ShieldCheck } from 'lucide-react'
 import { TypewriterTitle } from './typewriter-title'
 import { GradientButton } from './ui/gradient-button'
+import { getApiUrl } from '@/lib/mosaic/api'
 
 export function HomeClient() {
   useEffect(() => {
-    fetch('/api/home?segment=initial', { cache: 'no-store' }).catch(() => undefined)
+    fetch(getApiUrl('/api/home?segment=initial'), { cache: 'no-store' }).catch(() => undefined)
   }, [])
 
   return (

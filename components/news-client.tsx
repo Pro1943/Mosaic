@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'motion/react'
 import { ChevronRight, Newspaper } from 'lucide-react'
 import type { HomeStory, MosaicError } from '@/lib/mosaic/types'
+import { getApiUrl } from '@/lib/mosaic/api'
 import { ErrorPanel } from './mosaic-error'
 import { Loader } from './ui/loader'
 import { GradientButton } from './ui/gradient-button'
@@ -44,7 +45,7 @@ export function NewsClient() {
 
     async function checkFeed() {
       try {
-        const response = await fetch('/api/home?segment=rest', { cache: 'no-store' })
+        const response = await fetch(getApiUrl('/api/home?segment=rest'), { cache: 'no-store' })
         const contentType = response.headers.get('content-type') ?? ''
         if (!contentType.includes('application/json')) {
           if (isMounted) {
@@ -128,7 +129,7 @@ export function NewsClient() {
     async function pollMore() {
       attempts += 1
       try {
-        const response = await fetch(`/api/home/more?offset=${offset}`, { cache: 'no-store' })
+        const response = await fetch(getApiUrl(`/api/home/more?offset=${offset}`), { cache: 'no-store' })
         const contentType = response.headers.get('content-type') ?? ''
         if (!contentType.includes('application/json')) {
           setMoreError('Failed to fetch')
