@@ -43,6 +43,12 @@ const POLL_INTERVAL_MS = 3000
 /** Give up waiting for readiness after this many ms; show retry UI */
 const POLL_TIMEOUT_MS = 3 * 60 * 1000
 
+function clog(msg: string, data?: unknown) {
+  const prefix = `[Mosaic][${new Date().toISOString().slice(11, 23)}]`
+  if (data !== undefined) console.log(prefix, msg, data)
+  else console.log(prefix, msg)
+}
+
 export function NewsClient() {
   const router = useRouter()
   const [stories, setStories] = useState<HomeStory[]>([])
@@ -69,15 +75,13 @@ export function NewsClient() {
   // ── Main freshness-first loading loop ────────────────────────────────────
   useEffect(() => {
     isMountedRef.current = true
+    clog('NewsClient mounted — firing maintenance checks and starting status poll')
 
     // ── Run the maintenance checks in the background ──────────────────────
-    // These are fire-and-forget; we do not wait for or block on them.
     void triggerMaintenanceChecks()
 
     if (globalPollingActive) {
-      // Another mounted instance is already polling — do nothing.
-      // Stories will appear via state lift if needed, but in practice
-      // only one NewsClient renders on the /news page.
+      clog('Status poll already active from another mount — skipping duplicate')
       return
     }
 
@@ -87,8 +91,11 @@ export function NewsClient() {
     async function pollStatus() {
       if (!isMountedRef.current) return
 
+      const elapsed = Math.round((Date.now() - startedAt) / 1000)
+
       // ── Timeout guard ──────────────────────────────────────────────────
       if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        clog(`pollStatus TIMEOUT after ${elapsed}s — showing retry UI`)
         globalPollingActive = false
         if (isMountedRef.current) {
           setTimedOut(true)
@@ -97,12 +104,13 @@ export function NewsClient() {
         return
       }
 
+      clog(`pollStatus → fetching /api/home/status (elapsed: ${elapsed}s)`)
       try {
         const res = await fetch(getApiUrl('/api/home/status'), { cache: 'no-store' })
         if (!isMountedRef.current) return
 
         if (!res.ok) {
-          // Network/server error — retry after interval
+          clog(`pollStatus → non-OK response (${res.status}) — retrying in ${POLL_INTERVAL_MS}ms`)
           scheduleNextPoll(pollStatus)
           return
         }
@@ -110,11 +118,14 @@ export function NewsClient() {
         const payload = (await res.json()) as StatusResponse
         if (!isMountedRef.current) return
 
+        clog(`pollStatus → status="${payload.status}" storyCount=${payload.storyCount} ageSeconds=${payload.ageSeconds ?? 'n/a'}`)
+
         if (payload.status === 'ready') {
-          // ── News is fresh — fetch the actual stories ───────────────────
+          clog('pollStatus → READY — fetching stories')
           globalPollingActive = false
           await fetchHomeStories()
         } else if (payload.status === 'error') {
+          clog('pollStatus → backend error — stopping poll')
           globalPollingActive = false
           if (isMountedRef.current) {
             setError({ code: 'STATUS_ERROR', message: 'The news backend reported an internal error.' })
@@ -122,16 +133,15 @@ export function NewsClient() {
           }
         } else {
           // 'refreshing' | 'stale' — keep polling
-          if (isMountedRef.current) {
-            setLoadingSubtitle(
-              payload.status === 'refreshing'
-                ? 'Fetching and processing the latest news…'
-                : 'News data is stale — triggering a refresh…',
-            )
-          }
+          const subtitle = payload.status === 'refreshing'
+            ? 'Fetching and processing the latest news…'
+            : 'News data is stale — triggering a refresh…'
+          clog(`pollStatus → ${payload.status} — retrying in ${POLL_INTERVAL_MS}ms`)
+          if (isMountedRef.current) setLoadingSubtitle(subtitle)
           scheduleNextPoll(pollStatus)
         }
-      } catch {
+      } catch (err) {
+        clog('pollStatus → fetch threw, retrying', err instanceof Error ? err.message : String(err))
         if (isMountedRef.current) scheduleNextPoll(pollStatus)
       }
     }
@@ -142,6 +152,7 @@ export function NewsClient() {
       isMountedRef.current = false
       globalPollingActive = false
       if (timerRef.current) clearTimeout(timerRef.current)
+      clog('NewsClient unmounted — poll cancelled')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -166,6 +177,8 @@ export function NewsClient() {
 
   async function fetchHomeStories() {
     if (!isMountedRef.current) return
+    clog('fetchHomeStories → calling /api/home?segment=rest')
+    const t0 = Date.now()
     try {
       setLoadingSubtitle('Loading the latest stories…')
       const response = await fetch(getApiUrl('/api/home?segment=rest'), { cache: 'no-store' })
@@ -173,6 +186,7 @@ export function NewsClient() {
 
       const contentType = response.headers.get('content-type') ?? ''
       if (!contentType.includes('application/json')) {
+        clog(`fetchHomeStories → non-JSON response (${response.status})`)
         setError({ code: `HTTP_${response.status}`, message: 'Server returned a non-JSON response.' })
         setLoading(false)
         return
@@ -181,7 +195,10 @@ export function NewsClient() {
       const payload = (await response.json()) as HomeResponse
       if (!isMountedRef.current) return
 
+      clog(`fetchHomeStories → got ${payload.stories?.length ?? 0} stories, status="${payload.status}" (${Date.now() - t0}ms)`)
+
       if (!response.ok || payload.error) {
+        clog('fetchHomeStories → error in payload', payload.error)
         setError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
         setLoading(false)
         return
@@ -194,6 +211,7 @@ export function NewsClient() {
         if (isMountedRef.current) setLoading(false)
       }, 400)
     } catch (err) {
+      clog('fetchHomeStories → threw', err instanceof Error ? err.message : String(err))
       if (isMountedRef.current) {
         setError({
           code: 'HOME_REQUEST_FAILED',
@@ -205,15 +223,21 @@ export function NewsClient() {
   }
 
   async function triggerMaintenanceChecks() {
-    // Fire both maintenance endpoints in parallel; ignore results/errors.
-    await Promise.allSettled([
+    clog('triggerMaintenanceChecks → firing flush-cache and flush-articles in parallel')
+    const results = await Promise.allSettled([
       fetch(getApiUrl('/api/maintenance/flush-cache'), { method: 'POST', cache: 'no-store' }),
       fetch(getApiUrl('/api/maintenance/flush-articles'), { method: 'POST', cache: 'no-store' }),
     ])
+    results.forEach((r, i) => {
+      const name = i === 0 ? 'flush-cache' : 'flush-articles'
+      if (r.status === 'fulfilled') clog(`triggerMaintenanceChecks → ${name} ${r.value.status}`)
+      else clog(`triggerMaintenanceChecks → ${name} threw`, r.reason)
+    })
   }
 
   async function fetchMore() {
     if (fetchingMore || noMoreStories || cooldownRemaining > 0) return
+    clog(`fetchMore → requesting stories at offset=${stories.length}`)
     setFetchingMore(true)
     setMoreError(null)
 
