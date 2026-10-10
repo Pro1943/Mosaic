@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'motion/react'
@@ -10,6 +10,16 @@ import { getApiUrl } from '@/lib/mosaic/api'
 import { ErrorPanel } from './mosaic-error'
 import { Loader } from './ui/loader'
 import { GradientButton } from './ui/gradient-button'
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+type StatusResponse = {
+  status: 'ready' | 'refreshing' | 'stale' | 'error'
+  lastUpdated: string | null
+  ageSeconds: number | null
+  refreshStartedAt: string | null
+  storyCount: number
+}
 
 type HomeResponse = {
   stories?: HomeStory[]
@@ -23,100 +33,184 @@ type MoreResponse = {
   error?: MosaicError
 }
 
+// ── Guard: only one status-poll loop may run at a time across all mounts ───────
+let globalPollingActive = false
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+/** Poll /api/home/status every N ms while refreshing/stale */
+const POLL_INTERVAL_MS = 3000
+/** Give up waiting for readiness after this many ms; show retry UI */
+const POLL_TIMEOUT_MS = 3 * 60 * 1000
+
 export function NewsClient() {
   const router = useRouter()
   const [stories, setStories] = useState<HomeStory[]>([])
   const [error, setError] = useState<MosaicError | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingSubtitle, setLoadingSubtitle] = useState('Checking freshness of news data…')
+  const [timedOut, setTimedOut] = useState(false)
   const [fetchingMore, setFetchingMore] = useState(false)
   const [noMoreStories, setNoMoreStories] = useState(false)
   const [moreError, setMoreError] = useState<string | null>(null)
   const [cooldownRemaining, setCooldownRemaining] = useState<number>(0)
 
+  // Ref so inner callbacks can read latest values without stale closure
+  const isMountedRef = useRef(true)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // ── Route on error ────────────────────────────────────────────────────────
   useEffect(() => {
     if (error) {
       router.push(`/error?code=${encodeURIComponent(error.code)}&message=${encodeURIComponent(error.message)}`)
     }
   }, [error, router])
 
+  // ── Main freshness-first loading loop ────────────────────────────────────
   useEffect(() => {
-    let timerId: NodeJS.Timeout | null = null
-    let isMounted = true
+    isMountedRef.current = true
 
-    async function checkFeed() {
+    // ── Run the maintenance checks in the background ──────────────────────
+    // These are fire-and-forget; we do not wait for or block on them.
+    void triggerMaintenanceChecks()
+
+    if (globalPollingActive) {
+      // Another mounted instance is already polling — do nothing.
+      // Stories will appear via state lift if needed, but in practice
+      // only one NewsClient renders on the /news page.
+      return
+    }
+
+    globalPollingActive = true
+    const startedAt = Date.now()
+
+    async function pollStatus() {
+      if (!isMountedRef.current) return
+
+      // ── Timeout guard ──────────────────────────────────────────────────
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        globalPollingActive = false
+        if (isMountedRef.current) {
+          setTimedOut(true)
+          setLoading(false)
+        }
+        return
+      }
+
       try {
-        const response = await fetch(getApiUrl('/api/home?segment=rest'), { cache: 'no-store' })
-        const contentType = response.headers.get('content-type') ?? ''
-        if (!contentType.includes('application/json')) {
-          if (isMounted) {
-            setError({ code: `HTTP_${response.status}`, message: `Server returned non-JSON response` })
+        const res = await fetch(getApiUrl('/api/home/status'), { cache: 'no-store' })
+        if (!isMountedRef.current) return
+
+        if (!res.ok) {
+          // Network/server error — retry after interval
+          scheduleNextPoll(pollStatus)
+          return
+        }
+
+        const payload = (await res.json()) as StatusResponse
+        if (!isMountedRef.current) return
+
+        if (payload.status === 'ready') {
+          // ── News is fresh — fetch the actual stories ───────────────────
+          globalPollingActive = false
+          await fetchHomeStories()
+        } else if (payload.status === 'error') {
+          globalPollingActive = false
+          if (isMountedRef.current) {
+            setError({ code: 'STATUS_ERROR', message: 'The news backend reported an internal error.' })
             setLoading(false)
           }
-          return
-        }
-
-        const payload = (await response.json()) as HomeResponse
-        if (!isMounted) return
-
-        if (!response.ok || payload.error) {
-          setError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
-          setLoading(false)
-          return
-        }
-
-        const incoming = payload.stories ?? []
-        const currentStatus = payload.status ?? 'ready'
-
-        if (incoming.length > 0) {
-          setStories(incoming)
-          if (currentStatus !== 'processing') {
-            timerId = setTimeout(() => {
-              if (isMounted) setLoading(false)
-            }, 1000)
-          }
-        }
-
-        if (currentStatus === 'processing' || (currentStatus === 'refreshing' && incoming.length === 0)) {
-          timerId = setTimeout(checkFeed, 1500)
         } else {
-          if (incoming.length === 0 && currentStatus === 'ready') {
-            setLoading(false)
+          // 'refreshing' | 'stale' — keep polling
+          if (isMountedRef.current) {
+            setLoadingSubtitle(
+              payload.status === 'refreshing'
+                ? 'Fetching and processing the latest news…'
+                : 'News data is stale — triggering a refresh…',
+            )
           }
+          scheduleNextPoll(pollStatus)
         }
-      } catch (err) {
-        if (isMounted) {
-          setError({
-            code: 'HOME_REQUEST_FAILED',
-            message: err instanceof Error ? err.message : 'Could not request news feed',
-          })
-          setLoading(false)
-        }
+      } catch {
+        if (isMountedRef.current) scheduleNextPoll(pollStatus)
       }
     }
 
-    checkFeed()
+    pollStatus()
 
     return () => {
-      isMounted = false
-      if (timerId) clearTimeout(timerId)
+      isMountedRef.current = false
+      globalPollingActive = false
+      if (timerRef.current) clearTimeout(timerRef.current)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ── Cooldown ticker for "Fetch More" errors ────────────────────────────────
   useEffect(() => {
     if (cooldownRemaining <= 0) return
-
     const interval = setInterval(() => {
       setCooldownRemaining((prev) => {
-        if (prev <= 1) {
-          setMoreError(null)
-          return 0
-        }
+        if (prev <= 1) { setMoreError(null); return 0 }
         return prev - 1
       })
     }, 1000)
-
     return () => clearInterval(interval)
   }, [cooldownRemaining])
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function scheduleNextPoll(fn: () => void) {
+    timerRef.current = setTimeout(fn, POLL_INTERVAL_MS)
+  }
+
+  async function fetchHomeStories() {
+    if (!isMountedRef.current) return
+    try {
+      setLoadingSubtitle('Loading the latest stories…')
+      const response = await fetch(getApiUrl('/api/home?segment=rest'), { cache: 'no-store' })
+      if (!isMountedRef.current) return
+
+      const contentType = response.headers.get('content-type') ?? ''
+      if (!contentType.includes('application/json')) {
+        setError({ code: `HTTP_${response.status}`, message: 'Server returned a non-JSON response.' })
+        setLoading(false)
+        return
+      }
+
+      const payload = (await response.json()) as HomeResponse
+      if (!isMountedRef.current) return
+
+      if (!response.ok || payload.error) {
+        setError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
+        setLoading(false)
+        return
+      }
+
+      const incoming = payload.stories ?? []
+      setStories(incoming)
+      // Small visual delay so the transition feels intentional
+      timerRef.current = setTimeout(() => {
+        if (isMountedRef.current) setLoading(false)
+      }, 400)
+    } catch (err) {
+      if (isMountedRef.current) {
+        setError({
+          code: 'HOME_REQUEST_FAILED',
+          message: err instanceof Error ? err.message : 'Could not request news feed.',
+        })
+        setLoading(false)
+      }
+    }
+  }
+
+  async function triggerMaintenanceChecks() {
+    // Fire both maintenance endpoints in parallel; ignore results/errors.
+    await Promise.allSettled([
+      fetch(getApiUrl('/api/maintenance/flush-cache'), { method: 'POST', cache: 'no-store' }),
+      fetch(getApiUrl('/api/maintenance/flush-articles'), { method: 'POST', cache: 'no-store' }),
+    ])
+  }
 
   async function fetchMore() {
     if (fetchingMore || noMoreStories || cooldownRemaining > 0) return
@@ -179,6 +273,8 @@ export function NewsClient() {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`
   }
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <main id="latest" className="mx-auto max-w-6xl px-5 py-12 md:px-8 md:py-16">
       <motion.div
@@ -198,15 +294,62 @@ export function NewsClient() {
         <div className="py-12">
           <Loader
             title="Fetching API's..."
-            subtitle="Communicating with database and fetching latest coverage"
+            subtitle={loadingSubtitle}
             size="lg"
           />
         </div>
       ) : null}
 
-      {!loading && error ? <ErrorPanel error={error} /> : null}
+      {/* Timeout / retry UI — shown when backend takes too long to become ready */}
+      {!loading && timedOut ? (
+        <div className="py-12 text-center">
+          <p className="text-sm text-muted-foreground mb-4">
+            The news pipeline is taking longer than expected. Please try again in a moment.
+          </p>
+          <GradientButton
+            variant="teal"
+            label="Retry"
+            onClick={() => {
+              setTimedOut(false)
+              setLoading(true)
+              setLoadingSubtitle('Checking freshness of news data…')
+              globalPollingActive = false
+              // Re-trigger the effect by remounting would require a key trick;
+              // instead, directly restart the poll here
+              const startedAt = Date.now()
+              async function retry() {
+                if (!isMountedRef.current) return
+                if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+                  setTimedOut(true); setLoading(false); return
+                }
+                try {
+                  const res = await fetch(getApiUrl('/api/home/status'), { cache: 'no-store' })
+                  const payload = (await res.json()) as StatusResponse
+                  if (payload.status === 'ready') {
+                    await fetchHomeStories()
+                  } else if (payload.status === 'error') {
+                    setError({ code: 'STATUS_ERROR', message: 'The news backend reported an internal error.' })
+                    setLoading(false)
+                  } else {
+                    setLoadingSubtitle(payload.status === 'refreshing'
+                      ? 'Fetching and processing the latest news…'
+                      : 'News data is stale — triggering a refresh…')
+                    timerRef.current = setTimeout(retry, POLL_INTERVAL_MS)
+                  }
+                } catch {
+                  timerRef.current = setTimeout(retry, POLL_INTERVAL_MS)
+                }
+              }
+              globalPollingActive = true
+              retry()
+            }}
+          />
+        </div>
+      ) : null}
 
-      {!loading && !error ? (
+      {!loading && !timedOut && error ? <ErrorPanel error={error} /> : null}
+
+      {!loading && !timedOut && !error ? (
         <div className="grid gap-4">
           {stories.map((story, index) => (
             <motion.div
@@ -245,7 +388,7 @@ export function NewsClient() {
         </div>
       ) : null}
 
-      {!loading && !error && (
+      {!loading && !timedOut && !error && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
