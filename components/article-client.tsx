@@ -35,11 +35,10 @@ export function ArticleClient({ topicId }: { topicId: string }) {
   const [narrativeError, setNarrativeError] = useState<MosaicError | null>(null)
 
   useEffect(() => {
-    const targetError = metaError || narrativeError || comparisonError
-    if (targetError) {
-      router.push(`/error?code=${encodeURIComponent(targetError.code)}&message=${encodeURIComponent(targetError.message)}`)
+    if (metaError) {
+      router.push(`/error?code=${encodeURIComponent(metaError.code)}&message=${encodeURIComponent(metaError.message)}`)
     }
-  }, [metaError, narrativeError, comparisonError, router])
+  }, [metaError, router])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -68,31 +67,38 @@ export function ArticleClient({ topicId }: { topicId: string }) {
         return
       }
 
-      try {
-        const { response, payload } = await requestJson<ComparisonResponse>(getApiUrl(`/api/topics/${encodeURIComponent(topicId)}/comparison`))
-        if (!response.ok || payload.error || !payload.comparison) {
-          setComparisonError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
-        } else {
-          setComparison(payload.comparison)
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setComparisonError({ code: 'COMPARISON_REQUEST_FAILED', message: error instanceof Error ? error.message : 'Could not request comparison analysis.' })
+      // Fetch comparison and narrative in parallel
+      const fetchComparison = async () => {
+        try {
+          const { response, payload } = await requestJson<ComparisonResponse>(getApiUrl(`/api/topics/${encodeURIComponent(topicId)}/comparison`))
+          if (!response.ok || payload.error || !payload.comparison) {
+            setComparisonError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
+          } else {
+            setComparison(payload.comparison)
+          }
+        } catch (error) {
+          if (!controller.signal.aborted) {
+            setComparisonError({ code: 'COMPARISON_REQUEST_FAILED', message: error instanceof Error ? error.message : 'Could not request comparison analysis.' })
+          }
         }
       }
 
-      try {
-        const { response, payload } = await requestJson<NarrativeResponse>(getApiUrl(`/api/topics/${encodeURIComponent(topicId)}/narrative`))
-        if (!response.ok || payload.error || !payload.narrative) {
-          setNarrativeError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
-        } else {
-          setNarrative(payload.narrative)
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setNarrativeError({ code: 'NARRATIVE_REQUEST_FAILED', message: error instanceof Error ? error.message : 'Could not request narrative analysis.' })
+      const fetchNarrative = async () => {
+        try {
+          const { response, payload } = await requestJson<NarrativeResponse>(getApiUrl(`/api/topics/${encodeURIComponent(topicId)}/narrative`))
+          if (!response.ok || payload.error || !payload.narrative) {
+            setNarrativeError(payload.error ?? { code: `HTTP_${response.status}`, message: response.statusText })
+          } else {
+            setNarrative(payload.narrative)
+          }
+        } catch (error) {
+          if (!controller.signal.aborted) {
+            setNarrativeError({ code: 'NARRATIVE_REQUEST_FAILED', message: error instanceof Error ? error.message : 'Could not request narrative analysis.' })
+          }
         }
       }
+
+      await Promise.allSettled([fetchComparison(), fetchNarrative()])
     }
 
     load()
@@ -135,7 +141,30 @@ export function ArticleClient({ topicId }: { topicId: string }) {
             </span>
           </div>
           <div className="mt-9 space-y-9 text-[15px] leading-7 text-muted-foreground">
-            {narrativeError ? <ErrorPanel error={narrativeError} /> : null}
+            {narrativeError ? (
+              narrativeError.code === 'INSUFFICIENT_TOPIC_SOURCES' ? (
+                <div className="rounded-xl border border-border bg-card p-8 text-center">
+                  <p className="font-serif text-2xl text-foreground">Multi-source comparison unavailable</p>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    This story currently has only one reporting outlet. Mosaic synthesizes comparisons exclusively when two or more independent sources report on a topic.
+                  </p>
+                  {topic?.sources[0] ? (
+                    <div className="mt-6">
+                      <a
+                        href={topic.sources[0].url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-xs font-semibold text-background transition-opacity hover:opacity-90"
+                      >
+                        Read coverage on {topic.sources[0].name} <ExternalLink size={13} />
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <ErrorPanel error={narrativeError} />
+              )
+            ) : null}
             {!narrative && !narrativeError ? (
               <div className="py-12">
                 <Loader title="Initializing AI analysis..." subtitle="Synthesizing claims and extracting key perspectives" size="lg" />
@@ -159,9 +188,9 @@ export function ArticleClient({ topicId }: { topicId: string }) {
           </div>
         </article>
         <aside className="space-y-5 lg:sticky lg:top-6 lg:self-start" id="sources">
-          <CoverageCard narrative={narrative} />
+          <CoverageCard narrative={narrative} topic={topic} />
           <SourcesCard topic={topic} comparison={comparison} error={comparisonError} />
-          <DiffersCard narrative={narrative} error={narrativeError} />
+          <DiffersCard narrative={narrative} error={narrativeError} topic={topic} />
         </aside>
       </div>
     </main>
@@ -194,7 +223,19 @@ function SourceChips({ sources }: { sources: TopicMeta['sources'] }) {
   )
 }
 
-function CoverageCard({ narrative }: { narrative: NarrativeAnalysis | null }) {
+function CoverageCard({ narrative, topic }: { narrative: NarrativeAnalysis | null; topic: TopicMeta | null }) {
+  if (topic && topic.sources.length < 2) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-6">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <Percent size={15} className="text-accent" /> Source overlap
+        </div>
+        <p className="mt-4 font-serif text-4xl leading-none tracking-[-0.05em] text-muted-foreground">N/A</p>
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">Requires multiple independent sources to calculate overlap metrics.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -226,24 +267,28 @@ function CoverageCard({ narrative }: { narrative: NarrativeAnalysis | null }) {
 }
 
 function SourcesCard({ topic, comparison, error }: { topic: TopicMeta | null; comparison: ComparisonAnalysis | null; error: MosaicError | null }) {
+  const isInsufficient = error?.code === 'INSUFFICIENT_TOPIC_SOURCES'
+
   return (
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="mb-5 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
         <Layers3 size={15} className="text-accent" /> Sources reviewed
       </div>
-      {error ? <ErrorPanel error={error} /> : null}
+      {error && !isInsufficient ? <ErrorPanel error={error} /> : null}
       {!topic || (!comparison && !error) ? (
         <div className="py-6">
           <Loader title="Waiting for response from API..." subtitle="Reading reviewed sources" size="sm" />
         </div>
       ) : null}
-      {topic && comparison ? (
+      {topic && (comparison || isInsufficient) ? (
         <div className="space-y-5">
           {topic.sources.map((source) => (
-            <a key={source.url} href={source.url} className="group flex items-start justify-between gap-4">
+            <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" className="group flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-foreground">{source.name}</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">{sourceFraming(source.name, comparison)}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {comparison ? sourceFraming(source.name, comparison) : source.framing}
+                </p>
               </div>
               <ExternalLink size={14} className="mt-0.5 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" />
             </a>
@@ -254,19 +299,24 @@ function SourcesCard({ topic, comparison, error }: { topic: TopicMeta | null; co
   )
 }
 
-function DiffersCard({ narrative, error }: { narrative: NarrativeAnalysis | null; error: MosaicError | null }) {
+function DiffersCard({ narrative, error, topic }: { narrative: NarrativeAnalysis | null; error: MosaicError | null; topic: TopicMeta | null }) {
+  const isInsufficient = error?.code === 'INSUFFICIENT_TOPIC_SOURCES' || (topic && topic.sources.length < 2)
+
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-6">
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
         <GitBranch size={15} /> Differs on
       </div>
-      {error ? <p className="mt-3 text-sm leading-6 text-amber-950/70">{error.code}: {error.message}</p> : null}
-      {!narrative && !error ? (
+      {error && !isInsufficient ? <p className="mt-3 text-sm leading-6 text-amber-950/70">{error.code}: {error.message}</p> : null}
+      {isInsufficient ? (
+        <p className="mt-3 text-sm leading-6 text-amber-950/70">Single source coverage — divergence analysis requires multiple independent reporting sources.</p>
+      ) : null}
+      {!narrative && !error && !isInsufficient ? (
         <div className="py-6">
           <Loader title="Analyzing divergence..." subtitle="Determining key differences in source coverage" size="sm" />
         </div>
       ) : null}
-      {narrative ? <p className="mt-3 text-sm leading-6 text-amber-950/70">{narrative.differs_on}</p> : null}
+      {narrative && !isInsufficient ? <p className="mt-3 text-sm leading-6 text-amber-950/70">{narrative.differs_on}</p> : null}
       <div className="mt-4 flex items-center gap-2 text-xs text-amber-800">
         <AlertTriangle size={14} /> Difference, not a verdict
       </div>

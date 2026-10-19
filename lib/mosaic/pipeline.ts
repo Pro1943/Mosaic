@@ -76,12 +76,8 @@ export async function generateMoreHomepageCards(count = 3): Promise<HomeStory[]>
 export async function refreshSegment(segment: 'initial' | 'rest' | 'all' = 'all') {
   const acquired = await acquireIngestionLease()
   if (!acquired) {
-    const stale = await needsIngestion()
-    if (!stale) {
-      const existing = await getHomeStories()
-      return { story_count: existing.length }
-    }
-    await releaseIngestionLease().catch(() => undefined)
+    const existing = await getHomeStories()
+    return { story_count: existing.length }
   }
 
   try {
@@ -136,7 +132,8 @@ export async function regenerateHomepageCards() {
   const topics = await getTopicsNeedingHomepageCards()
   const generated = await mapWithConcurrency(topics, 2, async (topic) => {
     const articles = await getArticlesForTopic(topic.id)
-    if (articles.length < 2) return null
+    const uniqueSources = new Set(articles.map((a) => a.source.toLowerCase().trim()))
+    if (articles.length < 2 || uniqueSources.size < 2) return null
 
     return generateHomepageCardForTopic({
       topic_id: topic.id,

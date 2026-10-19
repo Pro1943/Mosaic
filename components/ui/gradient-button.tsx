@@ -117,6 +117,14 @@ const gradientColors: Record<ColorVariant, GradientColors> = {
   },
 }
 
+function prefixDark(classes: string): string {
+  return classes
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((c) => (c.startsWith('dark:') ? c : `dark:${c}`))
+    .join(' ')
+}
+
 export function GradientButton({
   label = 'Welcome',
   icon,
@@ -130,7 +138,7 @@ export function GradientButton({
   return (
     <Button
       className={cn(
-        'group relative h-12 overflow-hidden rounded-lg px-6 transition-all duration-500',
+        'group relative h-12 overflow-hidden rounded-lg px-6 transition-all duration-500 motion-reduce:transition-none',
         className
       )}
       variant="ghost"
@@ -141,7 +149,7 @@ export function GradientButton({
           'absolute inset-0 rounded-lg bg-gradient-to-b p-[2px]',
           'dark:bg-none',
           colors.light.border,
-          colors.dark.border
+          prefixDark(colors.dark.border)
         )}
       >
         <div
@@ -172,14 +180,14 @@ export function GradientButton({
         className={cn(
           'absolute inset-[2px] rounded-lg bg-gradient-to-b opacity-80',
           colors.light.overlay,
-          colors.dark.overlay
+          prefixDark(colors.dark.overlay)
         )}
       />
       <div
         className={cn(
           'absolute inset-[2px] rounded-lg bg-gradient-to-br',
           colors.light.accent,
-          colors.dark.accent
+          prefixDark(colors.dark.accent)
         )}
       />
 
@@ -197,7 +205,7 @@ export function GradientButton({
           className={cn(
             'bg-gradient-to-b bg-clip-text font-medium text-base text-transparent tracking-tight',
             colors.light.text,
-            colors.dark.text,
+            prefixDark(colors.dark.text),
             `dark:drop-shadow-[0_0_12px_${colors.dark.textGlow}]`
           )}
         >
@@ -207,9 +215,9 @@ export function GradientButton({
 
       <div
         className={cn(
-          'absolute inset-[2px] rounded-lg bg-gradient-to-r opacity-0 transition-opacity duration-300 group-hover:opacity-100',
+          'absolute inset-[2px] rounded-lg bg-gradient-to-r opacity-0 transition-opacity duration-300 motion-reduce:transition-none group-hover:opacity-100',
           colors.light.hover,
-          colors.dark.hover
+          prefixDark(colors.dark.hover)
         )}
       />
     </Button>

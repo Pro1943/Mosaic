@@ -6,14 +6,14 @@ create table if not exists public.news_articles (
   published_at timestamptz,
   body text not null,
   url text not null unique,
-  category text not null check (category in ('world', 'economy', 'sports', 'others')),
+  category text not null default 'world' check (category in ('world', 'economy', 'sports', 'others')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 create table if not exists public.topics (
   id text primary key,
-  category text not null check (category in ('world', 'economy', 'sports', 'others')),
+  category text not null default 'world' check (category in ('world', 'economy', 'sports', 'others')),
   title_hint text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -28,7 +28,7 @@ create table if not exists public.topic_articles (
 
 create table if not exists public.homepage_story_cache (
   topic_id text primary key references public.topics(id) on delete cascade,
-  category text not null check (category in ('world', 'economy', 'sports', 'others')),
+  category text not null default 'world' check (category in ('world', 'economy', 'sports', 'others')),
   neutral_headline text not null,
   snippet text not null,
   source_count integer not null,
@@ -56,7 +56,7 @@ create table if not exists public.narrative_cache (
 
 create table if not exists public.ingestion_runs (
   id bigint generated always as identity primary key,
-  category text not null check (category in ('world', 'economy', 'sports', 'others')),
+  category text not null default 'world' check (category in ('world', 'economy', 'sports', 'others')),
   status text not null check (status in ('success', 'failed')),
   details jsonb,
   finished_at timestamptz not null default now()

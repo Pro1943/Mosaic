@@ -33,9 +33,6 @@ type MoreResponse = {
   error?: MosaicError
 }
 
-// ── Guard: only one status-poll loop may run at a time across all mounts ───────
-let globalPollingActive = false
-
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 /** Poll /api/home/status every N ms while refreshing/stale */
@@ -63,7 +60,9 @@ export function NewsClient() {
 
   // Ref so inner callbacks can read latest values without stale closure
   const isMountedRef = useRef(true)
+  const isPollingRef = useRef(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const fetchMoreTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // ── Route on error ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -75,17 +74,14 @@ export function NewsClient() {
   // ── Main freshness-first loading loop ────────────────────────────────────
   useEffect(() => {
     isMountedRef.current = true
-    clog('NewsClient mounted — firing maintenance checks and starting status poll')
+    clog('NewsClient mounted — starting status poll')
 
-    // ── Run the maintenance checks in the background ──────────────────────
-    void triggerMaintenanceChecks()
-
-    if (globalPollingActive) {
-      clog('Status poll already active from another mount — skipping duplicate')
+    if (isPollingRef.current) {
+      clog('Status poll already active — skipping duplicate')
       return
     }
 
-    globalPollingActive = true
+    isPollingRef.current = true
     const startedAt = Date.now()
 
     async function pollStatus() {
@@ -96,7 +92,7 @@ export function NewsClient() {
       // ── Timeout guard ──────────────────────────────────────────────────
       if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
         clog(`pollStatus TIMEOUT after ${elapsed}s — showing retry UI`)
-        globalPollingActive = false
+        isPollingRef.current = false
         if (isMountedRef.current) {
           setTimedOut(true)
           setLoading(false)
@@ -122,11 +118,11 @@ export function NewsClient() {
 
         if (payload.status === 'ready') {
           clog('pollStatus → READY — fetching stories')
-          globalPollingActive = false
+          isPollingRef.current = false
           await fetchHomeStories()
         } else if (payload.status === 'error') {
           clog('pollStatus → backend error — stopping poll')
-          globalPollingActive = false
+          isPollingRef.current = false
           if (isMountedRef.current) {
             setError({ code: 'STATUS_ERROR', message: 'The news backend reported an internal error.' })
             setLoading(false)
@@ -150,8 +146,9 @@ export function NewsClient() {
 
     return () => {
       isMountedRef.current = false
-      globalPollingActive = false
+      isPollingRef.current = false
       if (timerRef.current) clearTimeout(timerRef.current)
+      if (fetchMoreTimerRef.current) clearTimeout(fetchMoreTimerRef.current)
       clog('NewsClient unmounted — poll cancelled')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -177,11 +174,11 @@ export function NewsClient() {
 
   async function fetchHomeStories() {
     if (!isMountedRef.current) return
-    clog('fetchHomeStories → calling /api/home?segment=rest')
+    clog('fetchHomeStories → calling /api/home')
     const t0 = Date.now()
     try {
       setLoadingSubtitle('Loading the latest stories…')
-      const response = await fetch(getApiUrl('/api/home?segment=rest'), { cache: 'no-store' })
+      const response = await fetch(getApiUrl('/api/home'), { cache: 'no-store' })
       if (!isMountedRef.current) return
 
       const contentType = response.headers.get('content-type') ?? ''
@@ -222,19 +219,6 @@ export function NewsClient() {
     }
   }
 
-  async function triggerMaintenanceChecks() {
-    clog('triggerMaintenanceChecks → firing flush-cache and flush-articles in parallel')
-    const results = await Promise.allSettled([
-      fetch(getApiUrl('/api/maintenance/flush-cache'), { method: 'POST', cache: 'no-store' }),
-      fetch(getApiUrl('/api/maintenance/flush-articles'), { method: 'POST', cache: 'no-store' }),
-    ])
-    results.forEach((r, i) => {
-      const name = i === 0 ? 'flush-cache' : 'flush-articles'
-      if (r.status === 'fulfilled') clog(`triggerMaintenanceChecks → ${name} ${r.value.status}`)
-      else clog(`triggerMaintenanceChecks → ${name} threw`, r.reason)
-    })
-  }
-
   async function fetchMore() {
     if (fetchingMore || noMoreStories || cooldownRemaining > 0) return
     clog(`fetchMore → requesting stories at offset=${stories.length}`)
@@ -248,19 +232,27 @@ export function NewsClient() {
       attempts += 1
       try {
         const response = await fetch(getApiUrl(`/api/home/more?offset=${offset}`), { cache: 'no-store' })
+        if (!isMountedRef.current) return
+
         const contentType = response.headers.get('content-type') ?? ''
         if (!contentType.includes('application/json')) {
-          setMoreError('Failed to fetch')
-          setCooldownRemaining(300)
-          setFetchingMore(false)
+          if (isMountedRef.current) {
+            setMoreError('Failed to fetch')
+            setCooldownRemaining(300)
+            setFetchingMore(false)
+          }
           return
         }
 
         const payload = (await response.json()) as MoreResponse
+        if (!isMountedRef.current) return
+
         if (!response.ok || payload.error) {
-          setMoreError(payload.error?.message ?? 'Failed to fetch')
-          setCooldownRemaining(300)
-          setFetchingMore(false)
+          if (isMountedRef.current) {
+            setMoreError(payload.error?.message ?? 'Failed to fetch')
+            setCooldownRemaining(300)
+            setFetchingMore(false)
+          }
           return
         }
 
@@ -268,20 +260,29 @@ export function NewsClient() {
         const status = payload.status ?? 'ready'
 
         if (incoming.length > 0) {
-          const existingIds = new Set(stories.map((s) => s.topic_id))
-          const fresh = incoming.filter((s) => !existingIds.has(s.topic_id))
-          setStories((prev) => [...prev, ...fresh])
-          setTimeout(() => setFetchingMore(false), 1000)
+          setStories((prev) => {
+            const existingIds = new Set(prev.map((s) => s.topic_id))
+            const fresh = incoming.filter((s) => !existingIds.has(s.topic_id))
+            return [...prev, ...fresh]
+          })
+          fetchMoreTimerRef.current = setTimeout(() => {
+            if (isMountedRef.current) setFetchingMore(false)
+          }, 1000)
           return
         }
 
         if (status === 'processing' && attempts < 8) {
-          setTimeout(pollMore, 1500)
+          fetchMoreTimerRef.current = setTimeout(() => {
+            if (isMountedRef.current) pollMore()
+          }, 1500)
         } else {
-          setNoMoreStories(true)
-          setFetchingMore(false)
+          if (isMountedRef.current) {
+            setNoMoreStories(true)
+            setFetchingMore(false)
+          }
         }
       } catch (err) {
+        if (!isMountedRef.current) return
         setMoreError(err instanceof Error ? err.message : 'Failed to fetch')
         setCooldownRemaining(300)
         setFetchingMore(false)
@@ -317,7 +318,7 @@ export function NewsClient() {
       {loading ? (
         <div className="py-12">
           <Loader
-            title="Fetching API's..."
+            title="Fetching APIs..."
             subtitle={loadingSubtitle}
             size="lg"
           />
@@ -337,34 +338,48 @@ export function NewsClient() {
               setTimedOut(false)
               setLoading(true)
               setLoadingSubtitle('Checking freshness of news data…')
-              globalPollingActive = false
+              isPollingRef.current = true
               // Re-trigger the effect by remounting would require a key trick;
               // instead, directly restart the poll here
               const startedAt = Date.now()
               async function retry() {
                 if (!isMountedRef.current) return
                 if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
-                  setTimedOut(true); setLoading(false); return
+                  isPollingRef.current = false
+                  if (isMountedRef.current) {
+                    setTimedOut(true)
+                    setLoading(false)
+                  }
+                  return
                 }
                 try {
                   const res = await fetch(getApiUrl('/api/home/status'), { cache: 'no-store' })
+                  if (!isMountedRef.current) return
                   const payload = (await res.json()) as StatusResponse
+                  if (!isMountedRef.current) return
                   if (payload.status === 'ready') {
+                    isPollingRef.current = false
                     await fetchHomeStories()
                   } else if (payload.status === 'error') {
-                    setError({ code: 'STATUS_ERROR', message: 'The news backend reported an internal error.' })
-                    setLoading(false)
+                    isPollingRef.current = false
+                    if (isMountedRef.current) {
+                      setError({ code: 'STATUS_ERROR', message: 'The news backend reported an internal error.' })
+                      setLoading(false)
+                    }
                   } else {
-                    setLoadingSubtitle(payload.status === 'refreshing'
-                      ? 'Fetching and processing the latest news…'
-                      : 'News data is stale — triggering a refresh…')
+                    if (isMountedRef.current) {
+                      setLoadingSubtitle(payload.status === 'refreshing'
+                        ? 'Fetching and processing the latest news…'
+                        : 'News data is stale — triggering a refresh…')
+                    }
                     timerRef.current = setTimeout(retry, POLL_INTERVAL_MS)
                   }
                 } catch {
-                  timerRef.current = setTimeout(retry, POLL_INTERVAL_MS)
+                  if (isMountedRef.current) {
+                    timerRef.current = setTimeout(retry, POLL_INTERVAL_MS)
+                  }
                 }
               }
-              globalPollingActive = true
               retry()
             }}
           />

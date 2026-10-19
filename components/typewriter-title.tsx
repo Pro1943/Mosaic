@@ -47,6 +47,11 @@ export function TypewriterTitle({
   }, [sequences])
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDisplayText(sequencesRef.current[0]?.text ?? 'Mosaic')
+      return
+    }
+
     const getTypingDelay = () => {
       if (!naturalVariance) {
         return typingSpeed
@@ -164,7 +169,7 @@ export function TypewriterTitle({
             animate={{
               opacity: [1, 1, 0, 0],
             }}
-            className="inline-block h-[1em] w-[3px] bg-accent"
+            className="inline-block h-[1em] w-[3px] bg-accent motion-reduce:hidden"
             transition={{
               duration: 1,
               repeat: Number.POSITIVE_INFINITY,

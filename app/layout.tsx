@@ -5,7 +5,6 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Mosaic — A clearer view of the news',
   description: 'Because one perspective never tells the whole story. Compare coverage, understand context, and see where sources agree or differ.',
-  generator: 'v0.app',
   icons: {
     icon: [
       {
