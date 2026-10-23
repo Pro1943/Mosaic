@@ -52,8 +52,30 @@
   --font-serif-family: Georgia, 'Times New Roman', serif;
 }
 
+.dark {
+  color-scheme: dark;
+  --background: #0c1f21;
+  --foreground: #f4f1ea;
+  --card: #122b2d;
+  --card-foreground: #f4f1ea;
+  --popover: #122b2d;
+  --popover-foreground: #f4f1ea;
+  --primary: #f4f1ea;
+  --primary-foreground: #0c1f21;
+  --secondary: #1b3a3d;
+  --secondary-foreground: #f4f1ea;
+  --muted: #193437;
+  --muted-foreground: #aec4c1;
+  --accent: #6fb3ab;
+  --accent-foreground: #0c1f21;
+  --border: #2a4b4d;
+  --input: #2a4b4d;
+  --ring: #6fb3ab;
+}
+
 * { @apply border-border outline-ring/50; }
 html { background: var(--background); scroll-behavior: smooth; }
 body { @apply bg-background text-foreground font-sans; }
 button, a { -webkit-tap-highlight-color: transparent; }
 ::selection { background: #cfe0dc; color: #262724; }
+.dark ::selection { background: #315d5a; color: #f4f1ea; }

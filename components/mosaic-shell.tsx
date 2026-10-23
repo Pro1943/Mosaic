@@ -3,15 +3,14 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Menu, X } from 'lucide-react'
+import { ThemeToggle } from './theme-provider'
 
 export function Logo() {
   return (
     <Link href="/" className="flex items-center gap-2.5 text-foreground">
-      <span className="grid size-7 grid-cols-2 gap-0.5" aria-hidden="true">
-        <span className="rounded-[3px] bg-accent" />
-        <span className="rounded-[3px] bg-foreground/80" />
-        <span className="rounded-[3px] bg-foreground/80" />
-        <span className="rounded-[3px] bg-accent" />
+      <span className="relative size-7" aria-hidden="true">
+        <img src="/mosaic-mark.svg" alt="" className="size-7 dark:hidden" />
+        <img src="/mosaic-mark-dark.svg" alt="" className="hidden size-7 dark:block" />
       </span>
       <span className="font-serif text-2xl tracking-[-0.04em]">
         Mosaic<span className="text-accent">.</span>
@@ -31,21 +30,24 @@ export function Header() {
             <Logo />
             <p className="hidden pt-[3px] text-sm leading-none text-muted-foreground md:block">Because one perspective never tells the whole story.</p>
           </div>
-          <nav className="hidden items-center gap-6 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground md:flex">
-            <Link href="/" className="transition-colors hover:text-accent">
-              Home
-            </Link>
-            <Link href="/news" className="transition-colors hover:text-accent">
-              News
-            </Link>
-          </nav>
-          <button
-            onClick={() => setIsOpen(true)}
-            className="text-muted-foreground transition-colors hover:text-foreground md:hidden"
-            aria-label="Open menu"
-          >
-            <Menu size={22} />
-          </button>
+          <div className="flex items-center gap-2">
+            <nav className="hidden items-center gap-6 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground md:flex">
+              <Link href="/" className="transition-colors hover:text-accent">
+                Home
+              </Link>
+              <Link href="/news" className="transition-colors hover:text-accent">
+                News
+              </Link>
+            </nav>
+            <ThemeToggle />
+            <button
+              onClick={() => setIsOpen(true)}
+              className="text-muted-foreground transition-colors hover:text-foreground md:hidden"
+              aria-label="Open menu"
+            >
+              <Menu size={22} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -90,6 +92,10 @@ export function Header() {
                 News
               </Link>
             </nav>
+
+            <div className="mt-5 border-t border-border pt-5">
+              <ThemeToggle />
+            </div>
 
             <div className="mt-auto border-t border-border pt-6">
               <p className="text-xs leading-relaxed text-muted-foreground">

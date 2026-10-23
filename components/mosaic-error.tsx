@@ -25,9 +25,9 @@ export function ErrorPanel({ error }: { error: MosaicError }) {
   }
 
   return (
-    <div className="rounded-xl border border-red-200 bg-red-50/70 p-5 text-left">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-red-800">{error.code}</p>
-      <p className="mt-2 text-sm leading-6 text-red-950/75">{error.message}</p>
+    <div className="rounded-xl border border-red-200 bg-red-50/70 p-5 text-left dark:border-red-400/30 dark:bg-red-950/25">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-red-800 dark:text-red-200">{error.code}</p>
+      <p className="mt-2 text-sm leading-6 text-red-950/75 dark:text-red-100/80">{error.message}</p>
     </div>
   )
 }

@@ -199,11 +199,12 @@ export function GradientButton({
         )}
       />
 
-      <div className="relative flex items-center justify-center gap-2">
+      <div className="relative flex items-center justify-center gap-2 dark:text-white">
         {icon}
         <span
           className={cn(
             'bg-gradient-to-b bg-clip-text font-medium text-base text-transparent tracking-tight',
+            'dark:!bg-none dark:!text-white',
             colors.light.text,
             prefixDark(colors.dark.text),
             `dark:drop-shadow-[0_0_12px_${colors.dark.textGlow}]`

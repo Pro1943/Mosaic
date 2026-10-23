@@ -303,21 +303,21 @@ function DiffersCard({ narrative, error, topic }: { narrative: NarrativeAnalysis
   const isInsufficient = error?.code === 'INSUFFICIENT_TOPIC_SOURCES' || (topic && topic.sources.length < 2)
 
   return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-6">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
+    <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-6 dark:border-amber-400/30 dark:bg-amber-950/25">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-800 dark:text-amber-200">
         <GitBranch size={15} /> Differs on
       </div>
-      {error && !isInsufficient ? <p className="mt-3 text-sm leading-6 text-amber-950/70">{error.code}: {error.message}</p> : null}
+      {error && !isInsufficient ? <p className="mt-3 text-sm leading-6 text-amber-950/70 dark:text-amber-100/80">{error.code}: {error.message}</p> : null}
       {isInsufficient ? (
-        <p className="mt-3 text-sm leading-6 text-amber-950/70">Single source coverage — divergence analysis requires multiple independent reporting sources.</p>
+        <p className="mt-3 text-sm leading-6 text-amber-950/70 dark:text-amber-100/80">Single source coverage — divergence analysis requires multiple independent reporting sources.</p>
       ) : null}
       {!narrative && !error && !isInsufficient ? (
         <div className="py-6">
           <Loader title="Comparing the coverage…" subtitle="Finding where reports differ" size="sm" />
         </div>
       ) : null}
-      {narrative && !isInsufficient ? <p className="mt-3 text-sm leading-6 text-amber-950/70">{narrative.differs_on}</p> : null}
-      <div className="mt-4 flex items-center gap-2 text-xs text-amber-800">
+      {narrative && !isInsufficient ? <p className="mt-3 text-sm leading-6 text-amber-950/70 dark:text-amber-100/80">{narrative.differs_on}</p> : null}
+      <div className="mt-4 flex items-center gap-2 text-xs text-amber-800 dark:text-amber-200">
         <AlertTriangle size={14} /> Difference, not a verdict
       </div>
     </div>
