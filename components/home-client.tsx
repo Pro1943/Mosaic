@@ -1,12 +1,17 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect } from 'react'
 import { motion } from 'motion/react'
 import { ArrowRight, GitBranch, Layers3, Percent, ShieldCheck } from 'lucide-react'
 import { TypewriterTitle } from './typewriter-title'
 import { GradientButton } from './ui/gradient-button'
+import { getApiUrl } from '@/lib/mosaic/api'
 
 export function HomeClient() {
+  useEffect(() => {
+    void fetch(getApiUrl('/api/ready'), { cache: 'no-store' }).catch(() => undefined)
+  }, [])
 
   return (
     <div className="flex flex-col">

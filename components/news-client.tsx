@@ -51,7 +51,7 @@ export function NewsClient() {
   const [stories, setStories] = useState<HomeStory[]>([])
   const [error, setError] = useState<MosaicError | null>(null)
   const [loading, setLoading] = useState(true)
-  const [loadingSubtitle, setLoadingSubtitle] = useState('Checking freshness of news data…')
+  const [loadingSubtitle, setLoadingSubtitle] = useState('Checking for the latest coverage…')
   const [timedOut, setTimedOut] = useState(false)
   const [fetchingMore, setFetchingMore] = useState(false)
   const [noMoreStories, setNoMoreStories] = useState(false)
@@ -130,8 +130,8 @@ export function NewsClient() {
         } else {
           // 'refreshing' | 'stale' — keep polling
           const subtitle = payload.status === 'refreshing'
-            ? 'Fetching and processing the latest news…'
-            : 'News data is stale — triggering a refresh…'
+            ? 'Gathering reports and preparing your stories…'
+            : 'Looking for the latest coverage…'
           clog(`pollStatus → ${payload.status} — retrying in ${POLL_INTERVAL_MS}ms`)
           if (isMountedRef.current) setLoadingSubtitle(subtitle)
           scheduleNextPoll(pollStatus)
@@ -177,7 +177,7 @@ export function NewsClient() {
     clog('fetchHomeStories → calling /api/home')
     const t0 = Date.now()
     try {
-      setLoadingSubtitle('Loading the latest stories…')
+      setLoadingSubtitle('Getting your stories ready…')
       const response = await fetch(getApiUrl('/api/home'), { cache: 'no-store' })
       if (!isMountedRef.current) return
 
@@ -318,7 +318,7 @@ export function NewsClient() {
       {loading ? (
         <div className="py-12">
           <Loader
-            title="Fetching APIs..."
+            title="Getting the latest stories…"
             subtitle={loadingSubtitle}
             size="lg"
           />
@@ -337,7 +337,7 @@ export function NewsClient() {
             onClick={() => {
               setTimedOut(false)
               setLoading(true)
-              setLoadingSubtitle('Checking freshness of news data…')
+              setLoadingSubtitle('Checking for the latest coverage…')
               isPollingRef.current = true
               // Re-trigger the effect by remounting would require a key trick;
               // instead, directly restart the poll here
@@ -369,8 +369,8 @@ export function NewsClient() {
                   } else {
                     if (isMountedRef.current) {
                       setLoadingSubtitle(payload.status === 'refreshing'
-                        ? 'Fetching and processing the latest news…'
-                        : 'News data is stale — triggering a refresh…')
+                        ? 'Gathering reports and preparing your stories…'
+                        : 'Looking for the latest coverage…')
                     }
                     timerRef.current = setTimeout(retry, POLL_INTERVAL_MS)
                   }
@@ -436,8 +436,8 @@ export function NewsClient() {
         >
           {fetchingMore ? (
             <Loader
-              title="Waiting for response from API..."
-              subtitle="Fetching additional stories"
+              title="Finding more stories…"
+              subtitle="Looking for more coverage"
               size="sm"
             />
           ) : cooldownRemaining > 0 ? (

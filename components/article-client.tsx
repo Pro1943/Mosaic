@@ -131,7 +131,7 @@ export function ArticleClient({ topicId }: { topicId: string }) {
             </>
           ) : (
             <div className="py-8">
-              <Loader title="Communicating with database..." subtitle="Loading story details and source metadata" size="md" />
+              <Loader title="Opening this story…" subtitle="Gathering the reports behind it" size="md" />
             </div>
           )}
           <div className="mt-6 flex items-center gap-2 border-y border-border py-3 text-xs text-muted-foreground">
@@ -277,7 +277,7 @@ function SourcesCard({ topic, comparison, error }: { topic: TopicMeta | null; co
       {error && !isInsufficient ? <ErrorPanel error={error} /> : null}
       {!topic || (!comparison && !error) ? (
         <div className="py-6">
-          <Loader title="Waiting for response from API..." subtitle="Reading reviewed sources" size="sm" />
+          <Loader title="Reading the coverage…" subtitle="Looking at each source" size="sm" />
         </div>
       ) : null}
       {topic && (comparison || isInsufficient) ? (
@@ -313,7 +313,7 @@ function DiffersCard({ narrative, error, topic }: { narrative: NarrativeAnalysis
       ) : null}
       {!narrative && !error && !isInsufficient ? (
         <div className="py-6">
-          <Loader title="Analyzing divergence..." subtitle="Determining key differences in source coverage" size="sm" />
+          <Loader title="Comparing the coverage…" subtitle="Finding where reports differ" size="sm" />
         </div>
       ) : null}
       {narrative && !isInsufficient ? <p className="mt-3 text-sm leading-6 text-amber-950/70">{narrative.differs_on}</p> : null}
