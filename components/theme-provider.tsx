@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import { Moon, Sun } from 'lucide-react'
+import { usePathname } from 'next/navigation'
 
 type Theme = 'light' | 'dark'
 
@@ -15,7 +16,7 @@ const ThemeContext = createContext<ThemeContextValue | null>(null)
 function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle('dark', theme === 'dark')
   document.documentElement.style.colorScheme = theme
-  const href = theme === 'dark' ? '/mosaic-mark-dark.svg' : '/mosaic-mark.svg'
+  const href = theme === 'dark' ? '/mosaic-mark-dark.svg?theme=dark' : '/mosaic-mark.svg?theme=light'
   document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="apple-touch-icon"]').forEach((link) => {
     link.href = href
   })
@@ -23,6 +24,7 @@ function applyTheme(theme: Theme) {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('light')
+  const pathname = usePathname()
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('mosaic-theme')
@@ -35,6 +37,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setThemeState(initialTheme)
     applyTheme(initialTheme)
   }, [])
+
+  useEffect(() => {
+    applyTheme(theme)
+  }, [pathname, theme])
 
   const setTheme = (nextTheme: Theme) => {
     setThemeState(nextTheme)
