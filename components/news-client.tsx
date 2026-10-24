@@ -298,6 +298,16 @@ export function NewsClient() {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`
   }
 
+  function formatStoryDate(date: string) {
+    const value = new Date(date)
+    if (Number.isNaN(value.getTime())) return 'Date unavailable'
+    return `Published ${new Intl.DateTimeFormat('en-US', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(value)}`
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -413,6 +423,9 @@ export function NewsClient() {
                   </h2>
                   <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground line-clamp-3">
                     {story.snippet}
+                  </p>
+                  <p className="mt-5 text-xs font-medium text-muted-foreground">
+                    {formatStoryDate(story.latest_published_at)}
                   </p>
                 </div>
 
