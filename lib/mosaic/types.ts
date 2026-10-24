@@ -1,12 +1,3 @@
-export type NormalizedArticle = {
-  source: string
-  headline: string
-  author: string | null
-  published_at: string | null
-  body: string
-  url: string
-}
-
 export type SourcePreview = {
   name: string
   url: string
@@ -23,18 +14,6 @@ export type HomeStory = {
 }
 
 export type ClaimType = 'reported_fact' | 'quoted_statement' | 'interpretation' | 'framing'
-
-export type ExtractedClaim = {
-  claim: string
-  type: ClaimType
-}
-
-export type ArticleExtraction = {
-  source: string
-  url: string
-  headline: string
-  claims: ExtractedClaim[]
-}
 
 export type ConflictView = {
   source: string

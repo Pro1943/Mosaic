@@ -1,10 +1,9 @@
-const DEFAULT_API_URL = 'https://mosaic-api-avi4.onrender.com'
-
 export function getApiBaseUrl(): string {
-  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_MOSAIC_API_URL) {
-    return process.env.NEXT_PUBLIC_MOSAIC_API_URL.replace(/\/$/, '')
+  const apiUrl = process.env.NEXT_PUBLIC_MOSAIC_API_URL?.trim()
+  if (!apiUrl) {
+    throw new Error('NEXT_PUBLIC_MOSAIC_API_URL must be configured.')
   }
-  return DEFAULT_API_URL
+  return apiUrl.replace(/\/$/, '')
 }
 
 export function getApiUrl(path: string): string {
